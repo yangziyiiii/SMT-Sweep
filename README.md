@@ -1,12 +1,18 @@
-#SMT-Sweep
+# 🚀 SMT-Sweep
+---
 
-### Prerequisite
+## Prerequisites
 
-    pip3 install toml
-    sudo apt install build-essential cmake default-jre libgmp-dev libboost-all-dev libgflags-dev
+Before setting up, make sure the following dependencies are installed:
 
-### SETUP
+```bash
+pip3 install toml
+sudo apt install build-essential cmake default-jre libgmp-dev libboost-all-dev libgflags-dev
+```
 
+## SETUP
+
+```bash
     ./contrib/setup-glog.sh
     ./contrib/setup-bison.sh
     ./contrib/setup-btor2tools.sh
@@ -14,7 +20,8 @@
     ./configure.sh
     cd build
     make
-    
-### Usage
+```
 
-For a quick example of how to use the simulator, you may look at `apps/test.cpp`
+## Usage
+
+For a quick example of how to use the simulator, you may look at **`apps/test.cpp`**
