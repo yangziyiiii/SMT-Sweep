@@ -305,81 +305,11 @@ if(NOT TARGET uninstall)
         COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake)
 endif()
 
-# add_executable(test1 "apps/idpv/test.cpp")
-# target_link_libraries(test1 wasim-lib)
 
-# add_executable(test2 "apps/idpv/unroll-test.cpp")
-# target_link_libraries(test2 wasim-lib)
-# set(CMAKE_BUILD_TYPE "debug")
 
-# add_executable(testmul32 "apps/idpv/mul32test.cpp")
-# target_link_libraries(testmul32 wasim-lib)
 
-# add_executable(test2cycle "apps/idpv/2cyclemultest.cpp")
-# target_link_libraries(test2cycle wasim-lib)
-
-# add_executable(testvv "apps/idpv/12cycletest.cpp")
-# target_link_libraries(testvv wasim-lib)
-
-# add_executable(testtop "apps/idpv/toptest.cpp")
-# target_link_libraries(testtop wasim-lib)
-
-# add_executable(testf32 "apps/idpv/f32multest.cpp")
-# target_link_libraries(testf32 wasim-lib)
-
-# add_executable(testdiv "apps/idpv/div.cpp")
-# target_link_libraries(testdiv wasim-lib)
-
-# add_executable(testdivuu "apps/idpv/div_uu_test.cpp")
-# target_link_libraries(testdivuu wasim-lib)
-
-# add_executable(testdivcondeq "apps/idpv/div_condeq.cpp")
-# target_link_libraries(testdivcondeq wasim-lib)
-
-# add_executable(test_aes "apps/idpv/aes.cpp")
-# target_link_libraries(test_aes wasim-lib)
-
-# add_executable(test_ast "apps/idpv/ast-test.cpp")
-# target_link_libraries(test_ast wasim-lib)
-
-# add_executable(test_structure "apps/idpv/btor_restructure.cpp")
-# target_link_libraries(test_structure wasim-lib)
-
-# add_executable(test_case2 "apps/idpv/case2/btor_sweeping_mul.cpp")
-# target_link_libraries(test_case2 wasim-lib)
-
-add_executable(bmc "apps/idpv/bmc-sweeping/bmc.cpp")
-target_link_libraries(bmc wasim-lib)
-
-add_executable(sweeping "apps/idpv/sweeping/sweeping-miter.cpp")
-target_link_libraries(sweeping wasim-lib)
-
-# add_executable(sequence "apps/idpv/sequence/sequence.cpp")
-# target_link_libraries(sequence wasim-lib)
-
-add_executable(test_case1 "apps/idpv/case1/btor_sweeping.cpp")
-target_link_libraries(test_case1 wasim-lib)
-
-add_executable(test_case3 "apps/idpv/case3/aes.cpp")
-target_link_libraries(test_case3 wasim-lib)
-
-add_executable(test_case4 "apps/idpv/case4/btor_sweeping.cpp")
-target_link_libraries(test_case4 wasim-lib)
-
-add_executable(test_case10 "apps/idpv/case10/naive.cpp")
-target_link_libraries(test_case10 wasim-lib)
-
-# add_executable(unroll "apps/idpv/case10/unroll.cpp")
-# target_link_libraries(unroll wasim-lib)
-
-# add_executable(independence_check_test "independence_check_test.cpp")
-# target_link_libraries(independence_check_test wasim)
-
-# add_executable(solver_test "apps/solver_test.cpp")
-# target_link_libraries(solver_test wasim-lib)
-
-# add_executable(symsim_test "symsim_test.cpp")
-# target_link_libraries(symsim_test wasim)
+add_executable(test "apps/test.cpp")
+target_link_libraries(test wasim-lib)
 
 # generate dependent header
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/config/testpath.h.in"  "${CMAKE_CURRENT_SOURCE_DIR}/config/testpath.h")

@@ -72,6 +72,7 @@ if [ ! -d "$DEPS/smt-switch" ]; then
     cd $DEPS
     git clone https://github.com/yangziyiiii/smt-switch.git
     cd smt-switch
+    git checkout 9d6718f7b4e62edf3f2554d4d4c40e6ccb2f6835
     ./contrib/setup-bitwuzla.sh
     if [ $cvc5_home = default ]; then
         ./contrib/setup-cvc5.sh
