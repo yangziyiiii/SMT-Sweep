@@ -55,14 +55,27 @@ endif()
 
 find_library(LIBRT rt)
 
+# check the local boost
+set(BOOST_ROOT "${PROJECT_SOURCE_DIR}/deps/boost/install")
+if(NOT EXISTS "${BOOST_ROOT}")
+    message(FATAL_ERROR "Missing Boost -- try running ./contrib/setup-boost.sh")
+endif()
+
+set(Boost_NO_SYSTEM_PATHS ON)
+set(Boost_USE_STATIC_LIBS ON)
+find_package(Boost REQUIRED COMPONENTS system filesystem program_options thread)
+
+if(NOT Boost_FOUND)
+    message(FATAL_ERROR "Could not find Boost in ${BOOST_ROOT}")
+endif()
+
 message("-- FOUND FLEX EXECUTABLE: ${FLEX_EXECUTABLE}")
 message("-- FOUND FLEX INCLUDE DIRS: ${FLEX_INCLUDE_DIRS}")
 
-
-find_package(Boost REQUIRED COMPONENTS system filesystem)
-MESSAGE( STATUS "Boost_INCLUDE_DIRS = ${Boost_INCLUDE_DIRS}.")
-MESSAGE( STATUS "Boost_LIBRARY_DIRS = ${Boost_LIBRARY_DIRS}.")
-MESSAGE( STATUS "Boost_LIBRARIES = ${Boost_LIBRARIES}.")
+message(STATUS "Found Boost version: ${Boost_VERSION}")
+message(STATUS "Using Boost from: ${BOOST_ROOT}")
+message(STATUS "Boost_INCLUDE_DIRS = ${Boost_INCLUDE_DIRS}")
+message(STATUS "Boost_LIBRARIES = ${Boost_LIBRARIES}")
 
 # TODO: Use find_package
 # find package
@@ -145,7 +158,7 @@ set(INCLUDE_DIRS
   "${SMT_SWITCH_DIR}/local/include"
   "${CMAKE_CURRENT_BINARY_DIR}"
   "${GMP_INCLUDE_DIR}"
-  "${FLEX_INCLUDE_DIRS}"
+  # "${FLEX_INCLUDE_DIRS}"
   "${Boost_INCLUDE_DIRS}"
   )
 
@@ -207,9 +220,15 @@ target_link_libraries(wasim-lib PUBLIC "${PROJECT_SOURCE_DIR}/deps/btor2tools/bu
 target_link_libraries(wasim-lib PUBLIC "${BITWUZLA_LDFLAGS}")
 target_link_libraries(wasim-lib PUBLIC "${PROJECT_SOURCE_DIR}/deps/glog/install/lib/libglog.a")
 
-# target_link_libraries(wasim-lib PUBLIC "${GMPXX_LIBRARIES}")
-# target_link_libraries(wasim-lib PUBLIC "${GMP_LIBRARIES}")
-# target_link_libraries(wasim-lib PUBLIC pthread)
+target_link_libraries(wasim-lib PUBLIC "${GMPXX_LIBRARIES}")
+target_link_libraries(wasim-lib PUBLIC "${GMP_LIBRARIES}")
+target_link_libraries(wasim-lib PUBLIC pthread)
+target_link_libraries(wasim-lib PUBLIC 
+    ${Boost_SYSTEM_LIBRARY}
+    ${Boost_FILESYSTEM_LIBRARY}
+    ${Boost_PROGRAM_OPTIONS_LIBRARY}
+    ${Boost_THREAD_LIBRARY}
+)
 
 # if (LIBRT)
 #   target_link_libraries(wasim-lib PUBLIC ${LIBRT})
@@ -306,10 +325,11 @@ if(NOT TARGET uninstall)
 endif()
 
 
+add_executable(test_circuitX "apps/circuitX.cpp")
+target_link_libraries(test_circuitX wasim-lib)
 
-
-add_executable(test "apps/test.cpp")
-target_link_libraries(test wasim-lib)
+# add_executable(test "apps/test.cpp")
+# target_link_libraries(test wasim-lib)
 
 # generate dependent header
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/config/testpath.h.in"  "${CMAKE_CURRENT_SOURCE_DIR}/config/testpath.h")
