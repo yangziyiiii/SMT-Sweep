@@ -205,7 +205,9 @@ target_link_libraries(wasim-lib PUBLIC gflags)
 target_link_libraries(wasim-lib PUBLIC "${SMT_SWITCH_DIR}/local/lib/libsmt-switch.a")
 target_link_libraries(wasim-lib PUBLIC "${PROJECT_SOURCE_DIR}/deps/btor2tools/build/lib/libbtor2parser.a")
 target_link_libraries(wasim-lib PUBLIC "${BITWUZLA_LDFLAGS}")
+# Link glog after gflags to ensure proper dependency resolution
 target_link_libraries(wasim-lib PUBLIC "${PROJECT_SOURCE_DIR}/deps/glog/install/lib/libglog.a")
+target_link_libraries(wasim-lib PUBLIC gflags)
 
 # target_link_libraries(wasim-lib PUBLIC "${GMPXX_LIBRARIES}")
 # target_link_libraries(wasim-lib PUBLIC "${GMP_LIBRARIES}")
@@ -310,6 +312,7 @@ endif()
 
 add_executable(test "apps/test.cpp")
 target_link_libraries(test wasim-lib)
+target_link_libraries(test /lib/x86_64-linux-gnu/libgflags.so)
 
 # generate dependent header
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/config/testpath.h.in"  "${CMAKE_CURRENT_SOURCE_DIR}/config/testpath.h")
