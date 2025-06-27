@@ -1,6 +1,9 @@
 #include <chrono>
 #include "smt-switch/bitwuzla_factory.h"
 #include "smt-switch/smtlib_reader.h"
+#include "smt-switch/utils.h"
+#include <gmp.h>
+#include <gmpxx.h>
 #include <fstream>
 #include <bitset>
 
@@ -35,6 +38,30 @@ void print_ast(const Term& term, int depth = 0) {
 }
 
 
+
+// RAII wrapper for GMP random state
+class GmpRandStateGuard
+{
+    gmp_randstate_t state;
+
+    public:
+    GmpRandStateGuard()
+    {
+        gmp_randinit_default(state);
+        gmp_randseed_ui(state, 42);
+    }
+
+    ~GmpRandStateGuard() { gmp_randclear(state); }
+
+    void random_input(mpz_t & rand_num, int num)
+    {
+        mpz_init2(rand_num, num);
+        mpz_urandomb(rand_num, state, num);
+    }
+
+    // operator gmp_randstate_t &() { return state; }
+    
+};
 void reduce_unsat_core_to_fixedpoint(
     smt::UnorderedTermSet & core_inout,
     const smt::SmtSolver & reducer_,
@@ -118,14 +145,14 @@ smt::Term get_first_unreducible_term (
 } // end of reduce_unsat_core_linear
 
 int main(int argc, char* argv[]) {
-    if (argc != 3) {
-        std::cerr << "Usage: " << argv[0] << " <file.smt2>\n";
-        return 1;
-    }
     auto start = std::chrono::steady_clock::now();
 
+    if (argc != 3) {
+        std::cerr << "Usage: " << argv[0] << " <file.smt2> <num_samples>\n";
+        return 1;
+    }
     std::string smt_file = argv[1];
-    int bound = std::stoi(argv[2]);
+    int num_samples = std::stoi(argv[2]);
 
     std::ofstream out("stimuli_all.txt", std::ios::out | std::ios::trunc);
     if (!out.is_open()) {
@@ -143,104 +170,117 @@ int main(int argc, char* argv[]) {
     reader.parse(smt_file);
 
     TermVec constraints;
-    TermVec inputs;
 
-    cout << "=== Lookup input ===" << endl;
-    for (int i = 0; i <= 13; ++i) {
-        auto input = reader.lookup_symbol("input!" + std::to_string(i)); //FIXME
-        inputs.push_back(input);
+    // ============== find free symbols ==============
+    UnorderedTermSet inputs_set;
+    for (const auto & a : reader.captured_assertions)
+        get_free_symbols(a, inputs_set);
+    TermVec inputs(inputs_set.begin(), inputs_set.end());
+    for(const auto & t : inputs) {
+        std::cout << "Input: " << t->to_string() << std::endl;
     }
 
-    constexpr int NUM_INPUTS = 14;
-    constexpr int BIT_WIDTH = 32;
-    std::vector<std::vector<std::bitset<2>>> coverage(NUM_INPUTS, std::vector<std::bitset<2>>(BIT_WIDTH));
-
-    auto erase_core_term = [](smt::TermVec &v, const smt::Term &term) -> std::size_t {
-        const auto old_sz = v.size();
-        v.erase(std::remove_if(v.begin(), v.end(),
-                            [&](const smt::Term &t) { return t == term; }),
-                v.end());
-        return old_sz - v.size();
-    };
-
-    cout << "=== Assertions AST ===" << endl;
+    // ============== find constraints ===========
     for (size_t i = 0; i < reader.captured_assertions.size(); ++i) {
         // cout << "Assertion " << i << ":" << endl;
-        print_ast(reader.captured_assertions[i]);
+        // print_ast(reader.captured_assertions[i]);
         constraints.push_back(reader.captured_assertions[i]);
         solver->assert_formula(reader.captured_assertions[i]);
     }
+    cout << "constraint size: " << constraints.size() << endl;
 
-    cout << "=== Check SAT ===" << endl;
-    int stimuli_count = 0;
-    TermVec current_inputs = inputs;
-    while (stimuli_count < bound) {
-        out << "=== Trial " << stimuli_count << " ===" << std::endl;
 
-        Result res = solver->check_sat_assuming(current_inputs);
-        out << "Result: " << res.to_string() << std::endl;
+    cout << "== step1: random simulation ==" << endl;
+    GmpRandStateGuard rand_guard;
+    std::size_t collected = 0;          // 成功样本计数
+    std::size_t trial_id  = 0;          // 总尝试计数（含失败）
 
-        if (res.is_sat()) {
-            for (const auto &input : inputs) {
-                Term val = solver->get_value(input);
-                out << input->to_string() << " = " << val->to_string() << std::endl;
-            }
-            out << std::endl;
-            ++stimuli_count;
-            TermVec blocking_literals;
-            for (const auto &input : inputs) {
-                Term val = solver->get_value(input);
-                Term lit = solver->make_term(Equal, input, val);
-                blocking_literals.push_back(lit);
-            }
-            Term block = solver->make_term(Not, solver->make_term(And, blocking_literals));
-            solver->assert_formula(block);
-        } else if (res.is_unsat()) {
+    while (collected < static_cast<std::size_t>(num_samples)) {
+        ++ trial_id;
+        solver->push();
+        unordered_map<Term, string> val;
+        TermVec assumptions;
+
+        for(const auto input : inputs){
+            auto width = input->get_sort()->get_width();
+            mpz_t input_mpz;
+            rand_guard.random_input(input_mpz, width);
+            std::unique_ptr<char, void (*)(void *)> input_str(mpz_get_str(nullptr, 2, input_mpz), free);
+            mpz_clear(input_mpz);
+            val[input] = std::string(input_str.get());
+
+            Sort bv_sort = solver->make_sort(BV, width);
+            Term input_random_val = solver->make_term(string(input_str.get()), bv_sort, 2);
+            Term eq = solver->make_term(Equal, input, input_random_val);
+            std::cout << input->to_string() << ": " << input_random_val << std::endl;
+            assumptions.push_back(eq);
+        }
+
+        Result r = solver->check_sat_assuming(assumptions);
+        bool sat_ok = r.is_sat();
+
+        if (!sat_ok) {
             UnorderedTermSet core;
             solver->get_unsat_assumptions(core);
-            reduce_unsat_core_to_fixedpoint(core, solver, res);
+            reduce_unsat_core_to_fixedpoint(core, solver, r);
+            TermList corelist(core.begin(), core.end());
 
-            smt::TermList corelist(core.begin(), core.end());
-            auto term_to_remove = get_first_unreducible_term(corelist, solver, res);
-            if (erase_core_term(current_inputs, term_to_remove) == 0) {
-                out << "Error: Failed to reduce unsat core." << std::endl;
-                break;
-            }
-        } else {
-            out << "Unknown solver result. Abort." << std::endl;
-            break;
-        }
-    }
+            auto erase_core_term = [](TermVec &v, const Term &t) {
+                v.erase(remove_if(v.begin(), v.end(),
+                                [&](const Term &x){ return x == t; }), v.end());
+            };
 
-    out << "Total time: "
-        << std::chrono::duration_cast<std::chrono::milliseconds>(
-               std::chrono::steady_clock::now() - start)
-               .count()
-        << " ms" << std::endl;
+            while (!corelist.empty())
+            {
+                Term term_to_reduce = get_first_unreducible_term(corelist, solver, r);
+                cout << "before size: " << assumptions.size() << endl;
+                erase_core_term(assumptions, term_to_reduce);
+                cout << "after size: " << assumptions.size() << endl;
 
-    // ===== Coverage Evaluation =====
-    auto coverage_start = std::chrono::steady_clock::now();
-    int total_bits = NUM_INPUTS * BIT_WIDTH;
-    int covered_bits = 0;
+                solver->pop(); 
+                solver->push();
+                r = solver->check_sat_assuming(assumptions);
+                if (r.is_sat()) { sat_ok = true; break; }
 
-    for (int i = 0; i < NUM_INPUTS; ++i) {
-        for (int j = 0; j < BIT_WIDTH; ++j) {
-            if (coverage[i][j] == std::bitset<2>("11")) {
-                ++covered_bits;
+                core.clear();
+                solver->get_unsat_assumptions(core);
+                reduce_unsat_core_to_fixedpoint(core, solver, r);
+                corelist.assign(core.begin(), core.end());
             }
         }
+
+        if (sat_ok)
+        {
+            out << "# sample " << collected << "  (trial " << trial_id << ")\n";
+            for (const auto &inp : inputs)
+            {
+                string bits;
+                if (auto it = val.find(inp); it != val.end())
+                    bits = it->second;                          // 已有随机值
+                else
+                {                                              // 需从模型获取
+                    Term c = solver->get_value(inp);
+                    bits   = c->to_string();               // 使用前述通用函数
+                }
+                out << inp->to_string() << " = " << bits << '\n';
+            }
+            out << '\n';
+            ++collected;                                       // 成功样本 +1
+        }
+        else {
+            cerr << "[WARN] trial " << trial_id
+                 << " 仍无法取得 SAT，放弃该样本\n";
+        }
+        solver->pop(); 
     }
 
-    double percent = (100.0 * covered_bits) / total_bits;
-    out << "Coverage: " << covered_bits << "/" << total_bits << " bits (" << percent << "%)" << std::endl;
 
-    auto coverage_end = std::chrono::steady_clock::now();
-    out << "Coverage evaluation time: "
-        << std::chrono::duration_cast<std::chrono::milliseconds>(coverage_end - coverage_start).count()
-        << " ms" << std::endl;
-
-
+    out << "rate: " << collected / trial_id << '\n';
     out.close();
     
+    auto end = std::chrono::steady_clock::now();
+    out << "Total time: "
+        << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() / 1000
+        << " s" << std::endl;
     return 0;
 }
