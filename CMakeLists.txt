@@ -310,9 +310,15 @@ endif()
 
 
 
-add_executable(test "apps/test.cpp")
-target_link_libraries(test wasim-lib)
-target_link_libraries(test /lib/x86_64-linux-gnu/libgflags.so)
+# add_executable(test "apps/test.cpp")
+# target_link_libraries(test wasim-lib)
+# target_link_libraries(test /lib/x86_64-linux-gnu/libgflags.so)
+
+add_executable(bmc "apps/bmc.cpp")
+target_link_libraries(bmc wasim-lib)
+
+add_executable(ccheck "apps/constriants_check.cpp")
+target_link_libraries(ccheck wasim-lib)
 
 # generate dependent header
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/config/testpath.h.in"  "${CMAKE_CURRENT_SOURCE_DIR}/config/testpath.h")
