@@ -135,6 +135,15 @@ void process_two_children_simulation(const TermVec & children,
 
     const auto& child_1 = children[0];
     const auto& child_2 = children[1];
+    
+    // 检查子节点是否在 node_data_map 中
+    if (node_data_map.find(child_1) == node_data_map.end()) {
+        throw std::runtime_error("[Simulation Error] Child 1 not found in node_data_map: " + child_1->to_string());
+    }
+    if (node_data_map.find(child_2) == node_data_map.end()) {
+        throw std::runtime_error("[Simulation Error] Child 2 not found in node_data_map: " + child_2->to_string());
+    }
+    
     const auto& sim_data_1 = node_data_map.at(child_1).get_simulation_data();
     const auto& sim_data_2 = node_data_map.at(child_2).get_simulation_data();
     if (sim_data_1.size() != static_cast<size_t>(num_iterations)

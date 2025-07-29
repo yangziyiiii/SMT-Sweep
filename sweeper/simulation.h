@@ -62,12 +62,12 @@ using BtorBitVectorPtr = std::unique_ptr<BtorBitVector>;
 
 
 
-BtorBitVectorPtr btor_bv_new(uint32_t bw) {
+inline BtorBitVectorPtr btor_bv_new(uint32_t bw) {
   return std::make_unique<BtorBitVector>(bw);
 }
 
 //TODO
-uint32_t btor_bv_hash (const BtorBitVector *bv)
+inline uint32_t btor_bv_hash (const BtorBitVector *bv)
 {
   assert (bv);
 
@@ -126,7 +126,7 @@ uint32_t btor_bv_hash (const BtorBitVector *bv)
 }
 
 
-void btor_bv_set_bit(BtorBitVector& bv, uint32_t pos, uint32_t bit)
+inline void btor_bv_set_bit(BtorBitVector& bv, uint32_t pos, uint32_t bit)
 {
     assert(bit == 0 || bit == 1);
     assert(pos < bv.width);
@@ -161,7 +161,7 @@ void btor_bv_set_bit(BtorBitVector& bv, uint32_t pos, uint32_t bit)
 
 
 
-BtorBitVectorPtr btor_bv_const(const char* str, uint32_t bw) 
+inline BtorBitVectorPtr btor_bv_const(const char* str, uint32_t bw) 
 {
     assert(strlen(str) <= bw);
 
@@ -183,7 +183,7 @@ BtorBitVectorPtr btor_bv_const(const char* str, uint32_t bw)
 }
 
 
-BtorBitVectorPtr btor_bv_char_to_bv(const char* assignment)
+inline BtorBitVectorPtr btor_bv_char_to_bv(const char* assignment)
 {
     assert(assignment);
     size_t len = strlen(assignment);
@@ -202,7 +202,7 @@ BtorBitVectorPtr btor_bv_char_to_bv(const char* assignment)
 
 
 
-uint32_t btor_bv_get_bit(const BtorBitVector& bv, uint32_t pos)
+inline uint32_t btor_bv_get_bit(const BtorBitVector& bv, uint32_t pos)
 {
     assert(pos < bv.width);
 
@@ -218,7 +218,7 @@ uint32_t btor_bv_get_bit(const BtorBitVector& bv, uint32_t pos)
 
 
 
-std::string btor_bv_to_string(const BtorBitVector& bv)
+inline std::string btor_bv_to_string(const BtorBitVector& bv)
 {
     uint64_t bw = bv.width;
 
@@ -246,7 +246,7 @@ std::string btor_bv_to_string(const BtorBitVector& bv)
 
 
 
-uint64_t btor_bv_to_uint64 (const BtorBitVector *bv)
+inline uint64_t btor_bv_to_uint64 (const BtorBitVector *bv)
 {
   assert (bv);
   assert (bv->width <= sizeof (uint64_t) * 8);
@@ -269,14 +269,14 @@ uint64_t btor_bv_to_uint64 (const BtorBitVector *bv)
 //TODO:
 #ifndef BTOR_USE_GMP
 #ifndef NDEBUG
-static bool rem_bits_zero_dbg (BtorBitVector *bv)
+inline static bool rem_bits_zero_dbg (BtorBitVector *bv)
 {
   return (bv->width % BTOR_BV_TYPE_BW == 0
           || (bv->bits[0] >> (bv->width % BTOR_BV_TYPE_BW) == 0));
 }
 #endif
 
-static void set_rem_bits_to_zero (BtorBitVector *bv)
+inline static void set_rem_bits_to_zero (BtorBitVector *bv)
 {
   if (bv->width != BTOR_BV_TYPE_BW * bv->len)
     bv->bits[0] &= BTOR_MASK_REM_BITS (bv);
@@ -284,7 +284,7 @@ static void set_rem_bits_to_zero (BtorBitVector *bv)
 #endif
 
 
-BtorBitVectorPtr btor_bv_uint64_to_bv(uint64_t value, uint32_t bw)
+inline BtorBitVectorPtr btor_bv_uint64_to_bv(uint64_t value, uint32_t bw)
 {
     assert(bw > 0);
 
@@ -314,7 +314,7 @@ BtorBitVectorPtr btor_bv_uint64_to_bv(uint64_t value, uint32_t bw)
 
 
 
-BtorBitVectorPtr btor_bv_add(const BtorBitVector& a, const BtorBitVector& b)
+inline BtorBitVectorPtr btor_bv_add(const BtorBitVector& a, const BtorBitVector& b)
 {
   if (a.width != b.width) {
     std::cerr << "[Error] btor_bv_add width mismatch: "
@@ -360,7 +360,7 @@ BtorBitVectorPtr btor_bv_add(const BtorBitVector& a, const BtorBitVector& b)
 #endif
 }
 
-BtorBitVectorPtr btor_bv_and(const BtorBitVector& a, const BtorBitVector& b)
+inline BtorBitVectorPtr btor_bv_and(const BtorBitVector& a, const BtorBitVector& b)
 {
     if (a.width != b.width) {
         std::cerr << "[Error] btor_bv_and width mismatch: "
@@ -391,7 +391,7 @@ BtorBitVectorPtr btor_bv_and(const BtorBitVector& a, const BtorBitVector& b)
 }
 
 
-bool btor_bv_is_zero (const BtorBitVector &bv)
+inline bool btor_bv_is_zero (const BtorBitVector &bv)
 {
 
 #ifdef BTOR_USE_GMP
@@ -405,7 +405,7 @@ bool btor_bv_is_zero (const BtorBitVector &bv)
 }
 
 
-bool btor_bv_is_one(const BtorBitVector& bv)
+inline bool btor_bv_is_one(const BtorBitVector& bv)
 {
 #ifdef BTOR_USE_GMP
     return mpz_cmp_ui(bv.val, 1) == 0;
@@ -420,7 +420,7 @@ bool btor_bv_is_one(const BtorBitVector& bv)
 }
 
 
-BtorBitVectorPtr btor_bv_one(uint32_t bw)
+inline BtorBitVectorPtr btor_bv_one(uint32_t bw)
 {
     assert(bw > 0);
 
@@ -442,7 +442,7 @@ BtorBitVectorPtr btor_bv_one(uint32_t bw)
 //TODO
 #define btor_bv_zero(BW) btor_bv_new (BW)
 
-BtorBitVectorPtr btor_bv_implies(const BtorBitVector& a, const BtorBitVector& b)
+inline BtorBitVectorPtr btor_bv_implies(const BtorBitVector& a, const BtorBitVector& b)
 {
     assert(a.width == b.width);
     assert(a.width == 1);
@@ -470,7 +470,7 @@ BtorBitVectorPtr btor_bv_implies(const BtorBitVector& a, const BtorBitVector& b)
 }
 
 
-BtorBitVectorPtr btor_bv_or(const BtorBitVector& a, const BtorBitVector& b)
+inline BtorBitVectorPtr btor_bv_or(const BtorBitVector& a, const BtorBitVector& b)
 {
     assert(a.width == b.width);
 
@@ -500,7 +500,7 @@ BtorBitVectorPtr btor_bv_or(const BtorBitVector& a, const BtorBitVector& b)
 }
 
 
-BtorBitVectorPtr btor_bv_nand(const BtorBitVector& a, const BtorBitVector& b)
+inline BtorBitVectorPtr btor_bv_nand(const BtorBitVector& a, const BtorBitVector& b)
 {
     assert(a.width == b.width);
 
@@ -533,7 +533,7 @@ BtorBitVectorPtr btor_bv_nand(const BtorBitVector& a, const BtorBitVector& b)
 }
 
 
-BtorBitVectorPtr btor_bv_nor(const BtorBitVector& a, const BtorBitVector& b)
+inline BtorBitVectorPtr btor_bv_nor(const BtorBitVector& a, const BtorBitVector& b)
 {
     assert(a.width == b.width);
 
@@ -568,7 +568,7 @@ BtorBitVectorPtr btor_bv_nor(const BtorBitVector& a, const BtorBitVector& b)
 
 
 
-BtorBitVectorPtr btor_bv_not(const BtorBitVector& bv)
+inline BtorBitVectorPtr btor_bv_not(const BtorBitVector& bv)
 {
     const uint32_t bw = bv.width;
 
@@ -612,7 +612,7 @@ BtorBitVectorPtr btor_bv_not(const BtorBitVector& bv)
   } while (0)
 #endif
 
-void btor_mem_free (void *p, size_t freed)
+inline void btor_mem_free (void *p, size_t freed)
 {
   assert (!p == !freed);
   BTOR_LOG_MEM ("%p free   %10ld\n", p, freed);
@@ -621,7 +621,7 @@ void btor_mem_free (void *p, size_t freed)
 
 
 
-int32_t btor_bv_compare(const BtorBitVector& a, const BtorBitVector& b)
+inline int32_t btor_bv_compare(const BtorBitVector& a, const BtorBitVector& b)
 {
     if (a.width != b.width) return -1;
 
@@ -642,7 +642,7 @@ int32_t btor_bv_compare(const BtorBitVector& a, const BtorBitVector& b)
 
 
 
-BtorBitVectorPtr btor_bv_copy(const BtorBitVector& bv)
+inline BtorBitVectorPtr btor_bv_copy(const BtorBitVector& bv)
 {
     const uint32_t bw = bv.width;
 
@@ -667,7 +667,7 @@ BtorBitVectorPtr btor_bv_copy(const BtorBitVector& bv)
 
 
 
-BtorBitVectorPtr btor_bv_uext(const BtorBitVector& bv, uint32_t len)
+inline BtorBitVectorPtr btor_bv_uext(const BtorBitVector& bv, uint32_t len)
 {
     if (len == 0)
         return btor_bv_copy(bv);
@@ -696,7 +696,7 @@ BtorBitVectorPtr btor_bv_uext(const BtorBitVector& bv, uint32_t len)
 
 
 
-BtorBitVectorPtr btor_bv_slice(const BtorBitVector& bv, uint32_t upper, uint32_t lower)
+inline BtorBitVectorPtr btor_bv_slice(const BtorBitVector& bv, uint32_t upper, uint32_t lower)
 {
     assert(upper >= lower);
     assert(upper < bv.width);
@@ -729,7 +729,7 @@ BtorBitVectorPtr btor_bv_slice(const BtorBitVector& bv, uint32_t upper, uint32_t
 
 
 
-BtorBitVectorPtr btor_bv_concat(const BtorBitVector& a, const BtorBitVector& b)
+inline BtorBitVectorPtr btor_bv_concat(const BtorBitVector& a, const BtorBitVector& b)
 {
     uint32_t bw = a.width + b.width;
 
@@ -786,7 +786,7 @@ BtorBitVectorPtr btor_bv_concat(const BtorBitVector& a, const BtorBitVector& b)
 }
 
 
-BtorBitVectorPtr btor_bv_ite(const BtorBitVector& cond,
+inline BtorBitVectorPtr btor_bv_ite(const BtorBitVector& cond,
   const BtorBitVector& then_bv,
   const BtorBitVector& else_bv)
 {
@@ -819,7 +819,7 @@ BtorBitVectorPtr btor_bv_ite(const BtorBitVector& cond,
 
 
 
-BtorBitVectorPtr btor_bv_eq(const BtorBitVector& a, const BtorBitVector& b)
+inline BtorBitVectorPtr btor_bv_eq(const BtorBitVector& a, const BtorBitVector& b)
 {
 
     assert(a.width == b.width);
@@ -852,7 +852,7 @@ BtorBitVectorPtr btor_bv_eq(const BtorBitVector& a, const BtorBitVector& b)
 }
 
 
-BtorBitVectorPtr btor_bv_xor(const BtorBitVector& a, const BtorBitVector& b)
+inline BtorBitVectorPtr btor_bv_xor(const BtorBitVector& a, const BtorBitVector& b)
 {
     assert(a.width == b.width);
 
@@ -884,7 +884,7 @@ BtorBitVectorPtr btor_bv_xor(const BtorBitVector& a, const BtorBitVector& b)
 }
 
 
-BtorBitVectorPtr btor_bv_mul(const BtorBitVector& a,
+inline BtorBitVectorPtr btor_bv_mul(const BtorBitVector& a,
                              const BtorBitVector& b)
 {
     assert(a.width == b.width);
@@ -933,7 +933,7 @@ BtorBitVectorPtr btor_bv_mul(const BtorBitVector& a,
 
 
 
-BtorBitVectorPtr btor_bv_int64_to_bv(int64_t value, uint32_t bw)
+inline BtorBitVectorPtr btor_bv_int64_to_bv(int64_t value, uint32_t bw)
 {
     assert(bw > 0);
 
@@ -967,14 +967,14 @@ BtorBitVectorPtr btor_bv_int64_to_bv(int64_t value, uint32_t bw)
 
 
 
-BtorBitVectorPtr btor_bv_from_bool(bool val)
+inline BtorBitVectorPtr btor_bv_from_bool(bool val)
 {
     auto res = btor_bv_zero(1);
     if (val) btor_bv_set_bit(*res, 0, 1);
     return res;
 }
 
-BtorBitVectorPtr btor_bv_ne(const BtorBitVector& a, const BtorBitVector& b)
+inline BtorBitVectorPtr btor_bv_ne(const BtorBitVector& a, const BtorBitVector& b)
 {
     assert(a.width == b.width);
 
@@ -1001,7 +1001,7 @@ BtorBitVectorPtr btor_bv_ne(const BtorBitVector& a, const BtorBitVector& b)
 
 
 
-BtorBitVectorPtr btor_bv_ones(uint32_t bw)
+inline BtorBitVectorPtr btor_bv_ones(uint32_t bw)
 {
     assert(bw > 0);
 
@@ -1017,7 +1017,7 @@ BtorBitVectorPtr btor_bv_ones(uint32_t bw)
 }
 
 
-BtorBitVectorPtr btor_bv_udiv(const BtorBitVector& a, const BtorBitVector& b)
+inline BtorBitVectorPtr btor_bv_udiv(const BtorBitVector& a, const BtorBitVector& b)
 {
     assert(a.width == b.width);
 
@@ -1042,7 +1042,7 @@ BtorBitVectorPtr btor_bv_udiv(const BtorBitVector& a, const BtorBitVector& b)
 }
 
 
-BtorBitVectorPtr btor_bv_neg(const BtorBitVector& bv)
+inline BtorBitVectorPtr btor_bv_neg(const BtorBitVector& bv)
 {
     uint32_t bw = bv.width;
 
@@ -1060,7 +1060,7 @@ BtorBitVectorPtr btor_bv_neg(const BtorBitVector& bv)
 
 
 
-BtorBitVectorPtr btor_bv_sub(const BtorBitVector& a, const BtorBitVector& b)
+inline BtorBitVectorPtr btor_bv_sub(const BtorBitVector& a, const BtorBitVector& b)
 {
     assert(a.width == b.width);
 
@@ -1078,13 +1078,13 @@ BtorBitVectorPtr btor_bv_sub(const BtorBitVector& a, const BtorBitVector& b)
 
 
 
-bool btor_bv_is_true(const BtorBitVector& bv)
+inline bool btor_bv_is_true(const BtorBitVector& bv)
 {
     assert(bv.width == 1);
     return btor_bv_get_bit(bv, 0);
 }
 
-bool btor_bv_is_false(const BtorBitVector& bv)
+inline bool btor_bv_is_false(const BtorBitVector& bv)
 {
     assert(bv.width == 1);
     return !btor_bv_get_bit(bv, 0);
@@ -1092,7 +1092,7 @@ bool btor_bv_is_false(const BtorBitVector& bv)
 
 
 
-BtorBitVectorPtr btor_bv_sext(const BtorBitVector& bv, uint32_t len)
+inline BtorBitVectorPtr btor_bv_sext(const BtorBitVector& bv, uint32_t len)
 {
     if (len == 0)
         return btor_bv_copy(bv);
@@ -1118,7 +1118,7 @@ BtorBitVectorPtr btor_bv_sext(const BtorBitVector& bv, uint32_t len)
 }
 
 
-BtorBitVectorPtr btor_bv_ult(const BtorBitVector& a, const BtorBitVector& b)
+inline BtorBitVectorPtr btor_bv_ult(const BtorBitVector& a, const BtorBitVector& b)
 {
     assert(a.width == b.width);
 
@@ -1144,7 +1144,7 @@ BtorBitVectorPtr btor_bv_ult(const BtorBitVector& a, const BtorBitVector& b)
 
 
 
-BtorBitVectorPtr btor_bv_ulte(const BtorBitVector& a, const BtorBitVector& b)
+inline BtorBitVectorPtr btor_bv_ulte(const BtorBitVector& a, const BtorBitVector& b)
 {
     assert(a.width == b.width);
 
@@ -1175,7 +1175,7 @@ BtorBitVectorPtr btor_bv_ulte(const BtorBitVector& a, const BtorBitVector& b)
 
 
 
-BtorBitVectorPtr btor_bv_ugt(const BtorBitVector& a, const BtorBitVector& b)
+inline BtorBitVectorPtr btor_bv_ugt(const BtorBitVector& a, const BtorBitVector& b)
 {
     assert(a.width == b.width);
 
@@ -1206,7 +1206,7 @@ BtorBitVectorPtr btor_bv_ugt(const BtorBitVector& a, const BtorBitVector& b)
 
 
 
-BtorBitVectorPtr btor_bv_ugte(const BtorBitVector& a, const BtorBitVector& b)
+inline BtorBitVectorPtr btor_bv_ugte(const BtorBitVector& a, const BtorBitVector& b)
 {
     assert(a.width == b.width);
 
@@ -1237,7 +1237,7 @@ BtorBitVectorPtr btor_bv_ugte(const BtorBitVector& a, const BtorBitVector& b)
 
 
 
-BtorBitVectorPtr btor_bv_slt(const BtorBitVector& a, const BtorBitVector& b)
+inline BtorBitVectorPtr btor_bv_slt(const BtorBitVector& a, const BtorBitVector& b)
 {
     assert(a.width == b.width);
 
@@ -1261,7 +1261,7 @@ BtorBitVectorPtr btor_bv_slt(const BtorBitVector& a, const BtorBitVector& b)
 
 
 
-BtorBitVectorPtr btor_bv_slte(const BtorBitVector& a, const BtorBitVector& b)
+inline BtorBitVectorPtr btor_bv_slte(const BtorBitVector& a, const BtorBitVector& b)
 {
     assert(a.width == b.width);
 
@@ -1286,7 +1286,7 @@ BtorBitVectorPtr btor_bv_slte(const BtorBitVector& a, const BtorBitVector& b)
 
 
 
-BtorBitVectorPtr btor_bv_sgt(const BtorBitVector& a, const BtorBitVector& b)
+inline BtorBitVectorPtr btor_bv_sgt(const BtorBitVector& a, const BtorBitVector& b)
 {
     assert(a.width == b.width);
 
@@ -1311,7 +1311,7 @@ BtorBitVectorPtr btor_bv_sgt(const BtorBitVector& a, const BtorBitVector& b)
 
 
 
-BtorBitVectorPtr btor_bv_sgte(const BtorBitVector& a, const BtorBitVector& b)
+inline BtorBitVectorPtr btor_bv_sgte(const BtorBitVector& a, const BtorBitVector& b)
 {
     assert(a.width == b.width);
 
@@ -1335,7 +1335,7 @@ BtorBitVectorPtr btor_bv_sgte(const BtorBitVector& a, const BtorBitVector& b)
 
 
 
-BtorBitVectorPtr btor_bv_xnor(const BtorBitVector& a, const BtorBitVector& b)
+inline BtorBitVectorPtr btor_bv_xnor(const BtorBitVector& a, const BtorBitVector& b)
 {
     assert(a.width == b.width);
 
@@ -1364,7 +1364,7 @@ BtorBitVectorPtr btor_bv_xnor(const BtorBitVector& a, const BtorBitVector& b)
 }
 
 
-BtorBitVectorPtr btor_bv_urem(const BtorBitVector& a, const BtorBitVector& b)
+inline BtorBitVectorPtr btor_bv_urem(const BtorBitVector& a, const BtorBitVector& b)
 {
     assert(a.width == b.width);
 
@@ -1393,7 +1393,7 @@ BtorBitVectorPtr btor_bv_urem(const BtorBitVector& a, const BtorBitVector& b)
 
 
 
-BtorBitVectorPtr btor_bv_sdiv(const BtorBitVector& a, const BtorBitVector& b)
+inline BtorBitVectorPtr btor_bv_sdiv(const BtorBitVector& a, const BtorBitVector& b)
 {
     assert(a.width == b.width);
 
@@ -1427,7 +1427,7 @@ BtorBitVectorPtr btor_bv_sdiv(const BtorBitVector& a, const BtorBitVector& b)
 
 
 
-BtorBitVectorPtr btor_bv_srem(const BtorBitVector& a, const BtorBitVector& b)
+inline BtorBitVectorPtr btor_bv_srem(const BtorBitVector& a, const BtorBitVector& b)
 {
     assert(a.width == b.width);
 
@@ -1461,7 +1461,7 @@ BtorBitVectorPtr btor_bv_srem(const BtorBitVector& a, const BtorBitVector& b)
 
 
 
-BtorBitVectorPtr btor_bv_srl_uint64(const BtorBitVector& a, uint64_t shift)
+inline BtorBitVectorPtr btor_bv_srl_uint64(const BtorBitVector& a, uint64_t shift)
 {
     auto res = btor_bv_new(a.width);
     if (shift >= a.width) return res;
@@ -1492,7 +1492,7 @@ BtorBitVectorPtr btor_bv_srl_uint64(const BtorBitVector& a, uint64_t shift)
 //TODO
 #ifdef BTOR_USE_GMP
 static uint32_t
-get_limb (const BtorBitVector *bv,
+inline get_limb (const BtorBitVector *bv,
           mp_limb_t *limb,
           uint32_t nbits_rem,
           bool zeros)
@@ -1534,7 +1534,7 @@ get_limb (const BtorBitVector *bv,
 }
 #else
 static uint32_t
-get_limb (const BtorBitVector *bv,
+inline get_limb (const BtorBitVector *bv,
           BTOR_BV_TYPE *limb,
           uint32_t nbits_rem,
           bool zeros)
@@ -1575,7 +1575,7 @@ get_limb (const BtorBitVector *bv,
 
 
 static uint32_t
-get_num_leading (const BtorBitVector *bv, bool zeros)
+inline get_num_leading (const BtorBitVector *bv, bool zeros)
 {
   assert (bv);
 
@@ -1619,14 +1619,14 @@ get_num_leading (const BtorBitVector *bv, bool zeros)
 }
 
 //TODO
-uint32_t btor_bv_get_num_leading_zeros (const BtorBitVector *bv)
+inline uint32_t btor_bv_get_num_leading_zeros (const BtorBitVector *bv)
 {
   return get_num_leading (bv, true);
 }
 
 
 
-static bool shift_is_uint64(const BtorBitVector* b, uint64_t* res)
+inline static bool shift_is_uint64(const BtorBitVector* b, uint64_t* res)
 {
     assert(b);
     assert(res);
@@ -1651,7 +1651,7 @@ static bool shift_is_uint64(const BtorBitVector* b, uint64_t* res)
 
 
 
-BtorBitVectorPtr btor_bv_srl(const BtorBitVector& a, const BtorBitVector& b)
+inline BtorBitVectorPtr btor_bv_srl(const BtorBitVector& a, const BtorBitVector& b)
 {
     assert(a.width == b.width);
 
@@ -1666,7 +1666,7 @@ BtorBitVectorPtr btor_bv_srl(const BtorBitVector& a, const BtorBitVector& b)
 
 
 
-BtorBitVectorPtr btor_bv_sra(const BtorBitVector& a, const BtorBitVector& b)
+inline BtorBitVectorPtr btor_bv_sra(const BtorBitVector& a, const BtorBitVector& b)
 {
     assert(a.width == b.width);
 
@@ -1682,7 +1682,7 @@ BtorBitVectorPtr btor_bv_sra(const BtorBitVector& a, const BtorBitVector& b)
     }
 }
 
-BtorBitVectorPtr btor_bv_sll_uint64(const BtorBitVector& a, uint64_t shift)
+inline BtorBitVectorPtr btor_bv_sll_uint64(const BtorBitVector& a, uint64_t shift)
 {
     uint32_t bw = a.width;
     auto res = btor_bv_new(bw);
@@ -1715,7 +1715,7 @@ BtorBitVectorPtr btor_bv_sll_uint64(const BtorBitVector& a, uint64_t shift)
     return res;
 }
 
-BtorBitVectorPtr btor_bv_sll(const BtorBitVector& a, const BtorBitVector& b)
+inline BtorBitVectorPtr btor_bv_sll(const BtorBitVector& a, const BtorBitVector& b)
 {
     assert(a.width == b.width);
 
