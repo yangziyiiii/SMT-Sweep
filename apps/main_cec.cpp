@@ -104,22 +104,19 @@ int main(int argc, char* argv[])
         solver->pop();
         auto pre_time = std::chrono::duration_cast<std::chrono::milliseconds>(solving_start - program_start_time).count();
 
-        std::cout << "[Pre] " << pre_time << " ms\n";
+        std::cout << "[Pre-processing] " << pre_time << " ms\n";
         std::cout << "[Solving] " << duration << " ms\n";
 
-        std::cout << "===============" << std::endl;
         if (res.is_unsat())      std::cout << "[RESULT] UNSAT\n";
         else if (res.is_sat())   std::cout << "[RESULT] SAT\n";
         else                     std::cout << "UNKNOWN - likely timed out\n";
-        std::cout << "===============" << std::endl;
 
-        std::cout << "Total: " << unsat_count + sat_count  
-                << ", [UNSAT] " 
-                << unsat_count << " , using " 
-                << total_unsat_time.count() << " ms, [SAT]"
-                << sat_count << " , using "
-                << total_sat_time.count() << " ms\n";
-        std::cout << "-----------------\n";
+        std::cout << "[Sweeping] " << count
+            << ", [UNSAT] " << unsat_count << " ("
+            << total_unsat_time.count()/1000.0 << " s), "
+            << "[SAT] " << sat_count << " ("
+            << total_sat_time.count()/1000.0 << " s)\n";
+
         ++i;
     }
 
