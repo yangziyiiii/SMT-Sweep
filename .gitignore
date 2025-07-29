@@ -43,3 +43,7 @@ output/
 .metals/
 .bsp/
 .scala-build/
+design/
+sim_pattern/
+apps/sweeper/
+spi_experiments/

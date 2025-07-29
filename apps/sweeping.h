@@ -202,6 +202,16 @@ smt::TermVec random_simulation(
 //在第一次生成之后，有两个优化的点
 //一个是对于unsat core的部分直接random (这个应该速度就比较快)
 //另一个是对于sat 的部分重新random，然后在reduce unsat core （这个应该耗时会很久，但是应该会提升coverage）
+std::string ensure_width(const std::string & val, uint64_t width) {
+        if (val.size() < width) {
+            return std::string(width - val.size(), '0') + val;
+        } else if (val.size() > width) {
+            return val.substr(val.size() - width);  // 截断高位保留低位
+        } else {
+            return val;
+        }
+    }
+
 
 template <typename TermIterable>
 void simulation_using_constraint(TermIterable & input_terms,
@@ -268,101 +278,132 @@ void simulation_using_constraint(TermIterable & input_terms,
     }
 
 
-    std::size_t total_trials   = 0;
-    std::size_t success_count  = 0;
-    std::chrono::duration<double> total_sat_time(0);
-    std::chrono::duration<double> total_unsat_time(0);
 
     for(auto constraint : constraints){
         solver->assert_formula(constraint);
     }
     
-    std::unordered_set<Term> variable_terms(input_terms.begin(),input_terms.end());
+    int total_trials = 0;
+    int success_count = 0;
 
+    
 
     while(success_count < num_iterations) {
-        if (dumpfile.is_open()) dumpfile << "[SIMULATION ITERATION " << success_count << "]\n";
-
-        //--------------------Generate or overwrite random input-------------------
-        unordered_map<Term, string> rand_val; //for each bound
-        std::cout << "[Simulation] bound init variable terms: " << variable_terms.size() << std::endl;
-        TermVec assumptions = random_simulation(variable_terms, solver, rand_guard, rand_val);
-        for (auto & [t, vstr] : fixed_inputs) {
-            Term vstr_fix = solver->make_term(vstr, t->get_sort());
-            assumptions.push_back(solver->make_term(Equal, t, vstr_fix));
-            rand_val.insert({t, vstr});
-        }
-        Result result = solver->check_sat_assuming(assumptions);
+        solver->push();
         ++total_trials;
+        if (dumpfile.is_open()) dumpfile << "[SIMULATION ITERATION " << total_trials << "]\n";
+
+        TermVec input_cache;
+        TermVec reduce_cache;
+        unordered_map<Term, string> rand_val; //for each bound
+        unordered_map<Term, string> reduce_val; //for each bound
+        TermVec assumptions;
+
+        if(!input_cache.empty()){
+            assumptions = random_simulation(input_cache, solver, rand_guard, rand_val);
+        }else {
+            assumptions = random_simulation(input_terms, solver, rand_guard, rand_val);
+        }
+
+        Result result = solver->check_sat_assuming(assumptions);
+        
 
         if (result.is_sat()) {
-            std::cout << "[Simulation] Trial " << success_count << " is SAT." << std::endl;
             success_count++;
-            for(auto [term, value] : rand_val) {
-                node_data_map[term].get_simulation_data().push_back(btor_bv_const(value.c_str(), term->get_sort()->get_width())); 
+            std::cout << "[Simulation] Trial " << success_count << " is SAT." << std::endl;
+            
+            for (const auto & it : input_terms) {
+                std::string vstr;
+                if (auto it_rand = rand_val.find(it); it_rand != rand_val.end())
+                    vstr = it_rand->second;
+                else if (auto it_reduce = reduce_val.find(it); it_reduce != reduce_val.end())
+                    vstr = it_reduce->second;
+                else {
+                    Term mval = solver->get_value(it);
+                    vstr = mval->to_string();
+                }
+
+                uint64_t width = it->get_sort()->get_width();
+                vstr = ensure_width(vstr, width);
+
+                node_data_map[it].get_simulation_data().push_back(
+                    btor_bv_const(vstr.c_str(), it->get_sort()->get_width()));
+
+                if (dumpfile.is_open())
+                    dumpfile << it->to_string() << " = " << vstr << '\n';
             }
         } else if(result.is_unsat()) {
             UnorderedTermSet core;
             solver->get_unsat_assumptions(core);
-            std::cout << "[Reduce] core size: " << core.size() << std::endl;
-            // reduce_unsat_core_to_fixedpoint(core, solver, result);
-            // TermList corelist(core.begin(), core.end());
-            // std::cout << "[Reduce] after reduce core: " << core.size() << std::endl;
-            // auto term_to_reduce = get_first_unreducible_term(corelist, solver, result);
+            std::cout << "[Reduce 1] core size, before " << core.size() ;
+            reduce_unsat_core_to_fixedpoint(core, solver, result);
+            std::cout << ", after " << core.size() << std::endl;
+            TermList corelist(core.begin(), core.end());
+            std::cout << "[Reduce] after reduce core: " << core.size() << std::endl;
+            auto term_to_reduce = get_first_unreducible_term(corelist, solver, result);
 
-            std::unordered_set<Term> erased_this_round; //this term is (= term val)
-            for(auto term_to_reduce : core) {
-                assumptions.erase(remove_if(assumptions.begin(), assumptions.end(), [&](const Term & t) { 
-                                    bool match = (t == term_to_reduce);
-                                    if (match) erased_this_round.insert(t);
-                                    return match; 
-                                }
-                                ),assumptions.end());
-            }
+            // for(auto term_to_reduce : core) {
+                assumptions.erase(remove_if(assumptions.begin(), assumptions.end(),
+                          [&](const Term & t) { return t == term_to_reduce; }),assumptions.end());
+                TermVec children(term_to_reduce->begin(), term_to_reduce->end());
+                reduce_val.insert({children[0], rand_val[children[0]]});
+            // }
+
             while(!assumptions.empty()) {
                 Result r = solver->check_sat_assuming(assumptions);
                 if (r.is_sat()) {
                     success_count++;
                     std::cout << "[Simulation] Trial " << success_count << " is SAT after reducing assumptions." << std::endl;
-                    std::cout << "[Simulation] erase: " << erased_this_round.size() << std::endl;
-                    
-                    if(success_count == 1){
-                        variable_terms.clear();
-                        //TODO
-                            
+                    for (const auto & term : input_terms) {
+                        //find term from assumptions
+                        for(auto assump : assumptions) {
+                            TermVec children(assump->begin(), assump->end());
+                            if( children[0] == term) {
+                                auto val_here = children[1]->to_string();
+                                uint64_t width = term->get_sort()->get_width();
+                                val_here = ensure_width(val_here, width);
+                                node_data_map[term].get_simulation_data().push_back(
+                                    btor_bv_const(val_here.c_str(), term->get_sort()->get_width()));
+                                if (dumpfile.is_open())
+                                    dumpfile << term->to_string() << " = " << val_here << '\n';
+                            } else {
+                                Term mval = solver->get_value(term);
+                                std::string vstr = mval->to_string();
+                                uint64_t width = term->get_sort()->get_width();
+                                vstr = ensure_width(vstr, width);
+                                node_data_map[term].get_simulation_data().push_back(
+                                    btor_bv_const(vstr.c_str(), term->get_sort()->get_width()));
+                                if (dumpfile.is_open())
+                                    dumpfile << term->to_string() << " = " << vstr << '\n';
+                            }
+                                
+                        }
                     }
-                    
-                    
-
-
-                    std::cout << "[Simulation] Remaining variable terms: " << variable_terms.size() << std::endl;
-                    std::cout << "[Simulation] fixed terms: " << fixed_inputs.size() << std::endl;
-                    
                     break; 
                 }else {
                     UnorderedTermSet core;
                     solver->get_unsat_assumptions(core);
-                    // reduce_unsat_core_to_fixedpoint(core, solver, r);
-                    // TermList corelist(core.begin(), core.end());
-                    // auto term_to_reduce = get_first_unreducible_term(corelist, solver, r);
-                    for(auto term_to_reduce : core) {
-                        erased_this_round.insert(term_to_reduce);
+                    std::cout << "[Reduce 2] core size, before " << core.size();
+                    reduce_unsat_core_to_fixedpoint(core, solver, r);
+                    std::cout << ", after " << core.size() << std::endl;
+                    TermList corelist(core.begin(), core.end());
+                    auto term_to_reduce = get_first_unreducible_term(corelist, solver, r);
+                    // for(auto term_to_reduce : core) {
                         assumptions.erase(remove_if(assumptions.begin(), assumptions.end(),
                                 [&](const Term & t) { return t == term_to_reduce; }),assumptions.end());
-                    }
+                        TermVec children(term_to_reduce->begin(), term_to_reduce->end());
+                        reduce_val.insert({children[0], rand_val[children[0]]});
+                    // }
                 }
                 
             }
         }
 
-
+        solver->pop();
         if (dumpfile.is_open()) dumpfile << '\n';
     }
 
-    std::cout << "[Summary] Total SAT time: " << total_sat_time.count() << " seconds.\n";
-    std::cout << "[Summary] Total UNSAT time: " << total_unsat_time.count() << " seconds.\n";
 
-    success_rate = total_trials ? static_cast<double>(success_count) / total_trials : 0.0;
 
     if (dumpfile.is_open()) {
         dumpfile << "[END SIMULATION BATCH]\n";
@@ -401,7 +442,8 @@ void post_order(smt::Term& root,
                 std::string & dump_file_path,
                 std::string & load_file_path,
                 std::chrono::milliseconds& total_sat_time,
-                std::chrono::milliseconds& total_unsat_time)
+                std::chrono::milliseconds& total_unsat_time,
+                smt::UnorderedTermSet & free_symbols)
 {
     std::stack<std::pair<Term,bool>> node_stack;
     node_stack.push({root,false});
@@ -428,23 +470,23 @@ void post_order(smt::Term& root,
     std::cout << "Begin sweeping with " << total_nodes << " nodes..." << std::endl;
 
     // Function to update and display progress
-    auto update_progress = [&](SweepingStep step) {
-        current_step = step;
-        const int bar_width = 50;
-        float progress = (float)processed_nodes / total_nodes;
+    // auto //update_progress = [&](SweepingStep step) {
+    //     current_step = step;
+    //     const int bar_width = 50;
+    //     float progress = (float)processed_nodes / total_nodes;
         
-        std::cout << "\r[";
-        int pos = bar_width * progress;
-        for (int i = 0; i < bar_width; ++i) {
-            if (i < pos) std::cout << "=";
-            else if (i == pos) std::cout << ">";
-            else std::cout << " ";
-        }
-        std::cout << "] " << int(progress * 100.0) << "% | "
-                  << "Step: " << step_names[step] << " | "
-                  << processed_nodes << "/" << total_nodes << " nodes"
-                  << std::flush;
-    };
+    //     std::cout << "\r[";
+    //     int pos = bar_width * progress;
+    //     for (int i = 0; i < bar_width; ++i) {
+    //         if (i < pos) std::cout << "=";
+    //         else if (i == pos) std::cout << ">";
+    //         else std::cout << " ";
+    //     }
+    //     std::cout << "] " << int(progress * 100.0) << "% | "
+    //               << "Step: " << step_names[step] << " | "
+    //               << processed_nodes << "/" << total_nodes << " nodes"
+    //               << std::flush;
+    // };
 
     while(!node_stack.empty()) {
         auto & [current,visited] = node_stack.top();
@@ -465,7 +507,7 @@ void post_order(smt::Term& root,
             TermVec children(current->begin(), current->end());
 
             if(current->is_value()) { // constant
-                update_progress(CONST_NODE);
+                //update_progress(CONST_NODE);
                 simulate_constant_node(current, num_iterations, node_data_map);
                 substitution_map.insert({current, current});
                 hash_term_map[node_data_map[current].hash()].push_back(current);
@@ -473,7 +515,7 @@ void post_order(smt::Term& root,
             } 
 
             else if(current->is_symbolic_const() && current->get_op().is_null()) { // leaf nodes
-                update_progress(LEAF_NODE);
+                //update_progress(LEAF_NODE);
                 assert(TermVec(current->begin(), current->end()).empty());// no children
                 assert(current->get_sort()->get_sort_kind() != ARRAY); // no array
                 simulate_leaf_node(current, num_iterations, node_data_map, dump_file_path, load_file_path);
@@ -485,7 +527,7 @@ void post_order(smt::Term& root,
                 TermVec children(current->begin(), current->end()); // find children
                 auto child_size = children.size();
 
-                update_progress(FIND_CHILD);
+                //update_progress(FIND_CHILD);
                 bool substitution_happened = false;
                 TermVec children_substituted;
                 children_substitution(children, children_substituted, substitution_map);
@@ -505,7 +547,7 @@ void post_order(smt::Term& root,
                 compute_simulation(children_substituted, num_iterations, op_type, node_data_map, all_luts, sim_data);           
                 auto current_hash = sim_data.hash();
 
-                update_progress(EQUIV_CHECK);
+                // update_progress(EQUIV_CHECK);
                 TryFindResult result = try_find_equiv_term(cnode, 
                                                            current_hash, 
                                                            sim_data, 
@@ -514,21 +556,27 @@ void post_order(smt::Term& root,
                                                            node_data_map, 
                                                            substitution_map, 
                                                            debug);
-                
+                // TryFindResult result = try_find_equiv_term_heur(cnode, 
+                //                                            current_hash, 
+                //                                            sim_data, 
+                //                                            num_iterations, 
+                //                                            hash_term_map, 
+                //                                            node_data_map, 
+                //                                            substitution_map,
+                //                                            free_symbols, 
+                //                                            debug);
+
                 if(result.found && result.term_eq)
                     substitution_map.insert({current, result.term_eq});
                 else {
                     for(const auto & t : result.terms_for_solving) {
-                        if (unsat_count >= 30 && sat_count >= 100) break; //FIXME magic
-                        solver->push();
-                        try {
-                            auto eq = solver->make_term(Equal, t, cnode);
-                            solver->assert_formula(solver->make_term(Not, eq));
-                        } catch (const std::exception& e) {
-                            std::cerr << "[Equal-Term-Error] " << e.what() << "\n";
-                            solver->pop();
-                            continue;
+                        if (unsat_count >= 30 && sat_count >= 100) { //FIXME: magic number
+                            break;
                         }
+                        solver->push();
+                        auto eq = solver->make_term(Equal, t, cnode);
+                        solver->assert_formula(solver->make_term(Not, eq));
+                       
                         std::ostringstream file_name;
                         
                         if (dump_enable) {
@@ -545,7 +593,10 @@ void post_order(smt::Term& root,
                         }
                         
                         auto start_time = std::chrono::high_resolution_clock::now();
+                        solver->push();
+                        solver->set_opt("time-limit", std::to_string(1));
                         auto solver_result = solver->check_sat(); //FIXME time consuming
+                        solver->pop();
                         auto end_time = std::chrono::high_resolution_clock::now();
                         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
                         auto elapsed = duration.count();
@@ -560,6 +611,9 @@ void post_order(smt::Term& root,
 
                         if (solver_result.is_unsat()) {
                             total_unsat_time += duration;
+                            // std::cout << t->to_string() << std::endl;
+                            // std::cout << cnode->to_string() << std::endl;
+                            // std::cout << "=======================" << std::endl;
                         } else {
                             total_sat_time += duration;
                         }
@@ -577,7 +631,7 @@ void post_order(smt::Term& root,
                             solver->pop();
                             break;
                         } else {
-                            update_progress(RESULT_SAT);
+                            //update_progress(RESULT_SAT);
                             sat_count++;
                             if (dump_enable) {
                                 std::ofstream smt2_file(file_name.str(), std::ios::app);
@@ -603,7 +657,7 @@ void post_order(smt::Term& root,
                     substitution_map.insert({current, cnode});
                     hash_term_map[current_hash].push_back(cnode);
                 }
-                update_progress(MAP_UPDATE);
+                //update_progress(MAP_UPDATE);
                 processed_nodes++;
             } // end if it has children
             node_stack.pop();            

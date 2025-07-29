@@ -133,7 +133,7 @@ class GmpRandStateGuard
     GmpRandStateGuard()
     {
         gmp_randinit_default(state);
-        gmp_randseed_ui(state, time(NULL));
+        gmp_randseed_ui(state, 42);
     }
 
     ~GmpRandStateGuard() { gmp_randclear(state); }

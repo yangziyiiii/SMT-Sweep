@@ -42,52 +42,43 @@ int main(int argc, char* argv[]) {
     solver->set_opt("incremental", "true");
     solver->set_opt("produce-models", "true");
     solver->set_opt("produce-unsat-assumptions", "true");
+    solver->set_opt("time-limit", std::to_string(property_check_timeout_ms / 1000.0));  // set time limit
 
     // Loading and parsing BTOR2 files
     TransitionSystem sts(solver);
-    BTOR2Encoder btor_parser(btor2_file, sts);
+    BTOR2Encoder btor_parser(btor2_file, sts, "a::");
 
     std::cout << "============================" << std::endl;
 
     // cout << "Loading and parsing BTOR2 files..." << endl;
 
     const auto& input_terms = btor_parser.inputsvec(); // all input here
+    const auto& output_terms = btor_parser.get_output_terms(); // all output here
     const auto& constraints = btor_parser.get_const_terms(); // all constraints here
     const auto& property = btor_parser.propvec(); // all properties here
     const auto& idvec = btor_parser.idvec();
 
-    cout << "Constraints: " << constraints.size() << endl;
-    cout << "input:" << input_terms.size() << endl;
-    cout << "Property size: " << property.size() << endl;
+    // cout << "Constraints: " << constraints.size() << endl;
+    for(auto c : constraints) {
+        solver->assert_formula(c);
+    }
 
     std::unordered_map<Term, NodeData> node_data_map; // term -> sim_data
     std::unordered_map<uint32_t, TermVec> hash_term_map; // hash -> TermVec
     std::unordered_map<Term, Term> substitution_map; // term -> term, for substitution
     std::unordered_map<Term, std::unordered_map<std::string, std::string>> all_luts; // state -> lookup table
 
+    std::cout << "stage 1 : init array & simualtion ... ";
+
     //Array init
     initialize_arrays({&sts}, all_luts, substitution_map, debug);
 
-    UnorderedTermSet free_symbols;
-    get_free_symbols(property[0],free_symbols);
-    std::cout << "free symbols size: " << free_symbols.size() << std::endl;
-    UnorderedTermSet to_remove;
-    for (auto i : free_symbols) {
-        if (i->get_sort()->get_sort_kind() == smt::ARRAY) {
-            to_remove.insert(i);
-        }
-    }
-    for (auto i : to_remove) {
-        free_symbols.erase(i);
-    }
-
+    std::cout << ">> Dump Path = " << dump_input_file << std::endl;
+    std::cout << ">> Load Path = " << load_input_file << std::endl;
     //simulation
-    simulation(free_symbols, num_iterations, node_data_map, dump_input_file, load_input_file, constraints);
-    for(auto i : free_symbols){
-        assert(node_data_map[i].get_simulation_data().size() == num_iterations);
-        substitution_map.insert({i, i});
-        hash_term_map[node_data_map[i].hash()].push_back(i);
-    }
+    // simulation(input_terms, num_iterations, node_data_map, dump_input_file, load_input_file, constraints);
+    double success_rate = 0.0;
+    simulation_using_constraint(input_terms, num_iterations, node_data_map, dump_input_file, load_input_file, solver, success_rate, constraints);
     std::cout << "done" <<std::endl;
     //end of simulation
 
@@ -112,7 +103,6 @@ int main(int argc, char* argv[]) {
     for(auto constraint_pair : sts.constraints()) {
         traversal_roots.push_back(constraint_pair.first);
     }
-    UnorderedTermSet out;
 
     cout << "Property size: " << property.size() << endl;
     for(auto root : property) {
@@ -124,10 +114,10 @@ int main(int argc, char* argv[]) {
         std::vector<Term> final_roots(unique_roots.begin(), unique_roots.end());
 
         Term combined_term = solver->make_term(And, final_roots);
-        post_order(combined_term, node_data_map, hash_term_map, substitution_map, all_luts, count, unsat_count, sat_count, solver, num_iterations, dump_smt, input_terms, property_check_timeout_ms, debug, dump_input_file, load_input_file, total_sat_time, total_unsat_time, out);
+        // post_order(combined_term, node_data_map, hash_term_map, substitution_map, all_luts, count, unsat_count, sat_count, solver, num_iterations, dump_smt, input_terms, property_check_timeout_ms, debug, dump_input_file, load_input_file, total_sat_time, total_unsat_time);
         print_time();
 
-        root = substitution_map.at(root);
+        // root = substitution_map.at(root);
         int total_nodes = 0;
         count_total_nodes(root, total_nodes);
         cout << "total nodes: " << total_nodes << endl;

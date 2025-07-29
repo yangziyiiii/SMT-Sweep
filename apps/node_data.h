@@ -417,7 +417,15 @@ void compute_simulation(
 
 void children_substitution(const smt::TermVec& children, smt::TermVec& out, const std::unordered_map<Term, Term>& substitution_map) {
 	for (const auto & c : children) {
+        if(c->get_sort()->get_sort_kind() == smt::ARRAY) {
+            // If the term is an array, we do not substitute it
+            out.push_back(c);
+            continue;
+        }
         auto pos = substitution_map.find(c);
+        if(pos == substitution_map.end()) {
+           std::cout << "[Warning] No substitution found for term: " << c->to_string() << std::endl;
+        }
         assert(pos != substitution_map.end());
         out.push_back(pos->second);
 	}
@@ -692,123 +700,6 @@ struct TryFindResult {
     TermVec terms_for_solving;
 };
 
-// TryFindResult try_find_equiv_term(const Term & cnode,
-//                                   const uint32_t & current_hash,
-//                                   const NodeData & sim_data,
-//                                   int & num_iterations,
-//                                   const std::unordered_map<uint32_t, TermVec> & hash_term_map,
-//                                   const std::unordered_map<Term, NodeData> & node_data_map,
-//                                   const std::unordered_map<Term, Term> & substitution_map,
-//                                   bool & debug) {
-//     TryFindResult result {false, nullptr, {}};
-
-//     if (hash_term_map.find(current_hash) == hash_term_map.end()) return result;
-//     const auto & terms_to_check = hash_term_map.at(current_hash);
-//     const auto & sim_data_vec = sim_data.get_simulation_data();
-//     size_t size = terms_to_check.size();
-    
-
-//     //partial vector to minimize the number of terms to check
-//     smt::TermVec filtered_terms;
-//     std::mt19937 rng(std::random_device{}());
-
-//     if (size <= 4) {
-//         filtered_terms = terms_to_check;
-//     }
-//     else if (size <= 10) {
-//         if (size >= 6) {
-//             filtered_terms.insert(filtered_terms.end(), terms_to_check.begin(), terms_to_check.begin() + 3);
-//             filtered_terms.insert(filtered_terms.end(), terms_to_check.end() - 3, terms_to_check.end());
-//         } else {
-//             size_t first = std::min(size_t(2), size);
-//             size_t last = std::min(size_t(2), size - first);
-//             filtered_terms.insert(filtered_terms.end(), terms_to_check.begin(), terms_to_check.begin() + first);
-//             filtered_terms.insert(filtered_terms.end(), terms_to_check.end() - last, terms_to_check.end());
-//         }
-//     }
-//     else {
-//         size_t prefix_count = 0, suffix_count = 0, max_middle_sample = 0, cap = 20;
-
-//         if (size <= 30) {
-//             prefix_count = std::min(size_t(4), size);
-//             suffix_count = std::min(size_t(4), size - prefix_count);
-//             max_middle_sample = std::min(size - prefix_count - suffix_count, size_t(4));
-//             cap = 12;
-//         } else if (size <= 50) {
-//             prefix_count = std::min(size_t(5), size);
-//             suffix_count = std::min(size_t(5), size - prefix_count);
-//             max_middle_sample = std::min(size - prefix_count - suffix_count, size_t(5));
-//             cap = 15;
-//         } else if (size <= 100) {
-//             prefix_count = std::min(size_t(5), size);
-//             suffix_count = std::min(size_t(5), size - prefix_count);
-//             max_middle_sample = std::min(size_t(8), size - prefix_count - suffix_count);
-//             cap = 18;
-//         } else {
-//             prefix_count = std::min(size_t(5), size);
-//             suffix_count = std::min(size_t(5), size - prefix_count);
-//             max_middle_sample = std::min(size_t(10), size - prefix_count - suffix_count);
-//             cap = 20;
-//         }
-
-//         smt::TermVec prefix, suffix, middle_sample;
-
-//         prefix.insert(prefix.end(), terms_to_check.begin(), terms_to_check.begin() + prefix_count);
-//         suffix.insert(suffix.end(), terms_to_check.end() - suffix_count, terms_to_check.end());
-
-//         auto middle_start = terms_to_check.begin() + prefix_count;
-//         auto middle_end   = terms_to_check.end() - suffix_count;
-//         smt::TermVec middle(middle_start, middle_end);
-
-//         std::sample(middle.begin(), middle.end(),
-//                     std::back_inserter(middle_sample),
-//                     max_middle_sample, rng);
-
-//         filtered_terms.reserve(prefix.size() + middle_sample.size() + suffix.size());
-//         filtered_terms.insert(filtered_terms.end(), prefix.begin(), prefix.end());
-//         filtered_terms.insert(filtered_terms.end(), middle_sample.begin(), middle_sample.end());
-//         filtered_terms.insert(filtered_terms.end(), suffix.begin(), suffix.end());
-
-//         if (filtered_terms.size() > cap) {
-//             filtered_terms.resize(cap);
-//         }
-//     }
-
-//     for (const auto & t : filtered_terms) {
-//         if (t == cnode) {
-//             result.found = true;
-//             result.term_eq = t;
-//             return result;
-//         }
-        
-//         if (t->get_sort() != cnode->get_sort()) {
-//             continue;
-//         }
-
-//         if (node_data_map.find(t) == node_data_map.end()) {
-//             std::ostringstream oss;
-//             oss << "[Missing Data] Simulation data not found in node_data_map for term:\n"
-//                 << "  - Term: " << t;
-//             std::cerr << oss.str() << std::endl;
-//             continue;
-//         }
-        
-//         const auto & existing_sim_data = node_data_map.at(t).get_simulation_data();
-//         bool match = true;
-//         for (int i = 0; i < num_iterations; ++i) {
-//             if (btor_bv_compare(*existing_sim_data[i], *sim_data_vec[i]) != 0) {
-//                 match = false;
-//                 break;
-//             }
-//         }
-//         if (match) {
-//             result.terms_for_solving.push_back(t);
-//         }
-//     }
-
-//     return result;
-// }
-
 TryFindResult try_find_equiv_term(const Term & cnode,
                                   const uint32_t & current_hash,
                                   const NodeData & sim_data,
@@ -832,18 +723,153 @@ TryFindResult try_find_equiv_term(const Term & cnode,
             return result;
         }
 
-        if (t->get_sort() != cnode->get_sort()) {
+        if (t->get_sort() != cnode->get_sort()) continue;
+        if (node_data_map.find(t) == node_data_map.end()) continue;
+
+        const auto & existing_sim_data = node_data_map.at(t).get_simulation_data();
+        bool match = true;
+        for (int i = 0; i < num_iterations; ++i) {
+            if (btor_bv_compare(*existing_sim_data[i], *sim_data_vec[i]) != 0) {
+                match = false;
+                break;
+            }
+        }
+        if (match) {
+            result.terms_for_solving.push_back(t);
+        }
+    }
+
+    return result;
+}
+
+
+void collect_coi(const TermVec & roots,
+                        const UnorderedTermSet & free_syms,
+                        TermVec & coi_out)                 // ← 结果放在 vector
+{
+    UnorderedTermSet visited;                              // 用哈希集合判重
+    std::vector<Term> stack(roots.begin(), roots.end());   // 显式栈 DFS/BFS
+
+    while (!stack.empty()) {
+        Term cur = stack.back();
+        stack.pop_back();
+
+        if (!visited.insert(cur).second)                   // 已访问过
+            continue;
+
+        /* 命中自由符号 ⇒ 记录进 COI，且不再向前溯源 */
+        if (free_syms.find(cur) != free_syms.end()) {
+            coi_out.push_back(cur);                        // vector 追加
             continue;
         }
 
-        if (node_data_map.find(t) == node_data_map.end()) {
-            std::ostringstream oss;
-            oss << "[Missing Data] Simulation data not found in node_data_map for term:\n"
-                << "  - Term: " << t;
-            std::cerr << oss.str() << std::endl;
+        /* 常量节点终止递归 */
+        if (cur->is_value())
             continue;
+
+        /* 继续遍历子结点（= 反向沿父边） */
+        for (auto it = cur->begin(); it != cur->end(); ++it)
+            stack.push_back(*it);
+    }
+}
+
+uint32_t get_level(const Term & t, std::unordered_map<Term, uint32_t> & cache) {
+    if (cache.find(t) != cache.end()) {
+        return cache[t];
+    }
+
+    // 如果是输入变量或常量，层级为 0
+    if (t->is_symbolic_const() || t->is_value()) {
+        cache[t] = 0;
+        return 0;
+    }
+
+    uint32_t max_child_level = 0;
+    for (auto it = t->begin(); it != t->end(); ++it) {
+        uint32_t child_level = get_level(*it, cache);
+        if (child_level > max_child_level) {
+            max_child_level = child_level;
+        }
+    }
+
+    cache[t] = max_child_level + 1;
+    return cache[t];
+}
+
+TryFindResult try_find_equiv_term_heur(const Term & cnode,
+                                  const uint32_t & current_hash,
+                                  const NodeData & sim_data,
+                                  int & num_iterations,
+                                  const std::unordered_map<uint32_t, TermVec> & hash_term_map,
+                                  const std::unordered_map<Term, NodeData> & node_data_map,
+                                  const std::unordered_map<Term, Term> & substitution_map,
+                                  UnorderedTermSet & free_symbols,
+                                  bool & debug) {
+    TryFindResult result {false, nullptr, {}};
+
+    if (hash_term_map.find(current_hash) == hash_term_map.end()) return result;
+    const auto & terms_to_check = hash_term_map.at(current_hash);
+    const auto & sim_data_vec = sim_data.get_simulation_data();
+    size_t size = terms_to_check.size();
+    
+    std::vector<std::pair<Term, double>> scored_terms; // 用于存储分数和对应的 term
+    // 不使用随机过程，直接顺序遍历所有 terms_to_check
+    for (const auto & t : terms_to_check) {
+        if (t == cnode) {
+            result.found = true;
+            result.term_eq = t;
+            return result;
         }
 
+        if (t->get_sort() != cnode->get_sort()) continue;
+        if (node_data_map.find(t) == node_data_map.end()) continue;
+
+        const auto & t_data = node_data_map.at(t);
+        const auto & t_sim = t_data.get_simulation_data();
+        // const auto & t_support = t_data.get_support_set();
+        // const auto & t_level = t_data.get_level();
+        // const auto & t_hash = t_data.get_structural_hash();
+
+        // --- Compute hamming scores ---
+        int hamming = 0;
+        for (int i = 0; i < num_iterations; ++i) {
+            if (btor_bv_compare(*sim_data_vec[i], *t_sim[i]) != 0)
+                ++hamming;
+        }
+
+        // --- support COI overlap ---
+        TermVec coi_cnode, coi_t;
+        collect_coi({cnode}, free_symbols, coi_cnode);
+        collect_coi({t}, free_symbols, coi_t);
+        std::unordered_set<Term> s1(coi_cnode.begin(), coi_cnode.end());
+        std::unordered_set<Term> s2(coi_t.begin(), coi_t.end());
+
+        size_t inter = 0;
+        for (const auto & x : s1) {
+            if (s2.count(x)) ++inter;
+        }
+        size_t union_size = s1.size() + s2.size() - inter;
+        double support_overlap = (union_size == 0) ? 1.0 : static_cast<double>(inter) / union_size;
+
+        // --- level ---
+        std::unordered_map<Term, uint32_t> level_cache;
+        uint32_t level_cnode = get_level(cnode, level_cache);
+        uint32_t level_t = get_level(t, level_cache);
+        double level_diff = static_cast<double>(std::abs(static_cast<int>(level_cnode) - static_cast<int>(level_t)));
+
+        // --- op ---
+        double op_score = (t->get_op() == cnode->get_op()) ? -0.5 : +0.5;
+        
+
+        double score = 0.0 ;
+        scored_terms.emplace_back(t, score);
+    }
+        
+    // Sort by ascending score
+    std::sort(scored_terms.begin(), scored_terms.end(),
+              [](const auto & a, const auto & b) { return a.second < b.second; });
+
+    for (const auto & [t, score] : scored_terms) {
         const auto & existing_sim_data = node_data_map.at(t).get_simulation_data();
         bool match = true;
         for (int i = 0; i < num_iterations; ++i) {

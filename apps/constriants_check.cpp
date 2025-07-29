@@ -73,7 +73,21 @@ void read_simulation_inputs(const std::string & load_file_path,
 }
 
 
-        
+inline TermVec flatten_and_constraints(const TermVec & constraints) {
+    TermVec atoms;
+    vector<Term> stack(constraints.begin(), constraints.end());
+
+    while (!stack.empty()) {
+        Term cur = stack.back();
+        stack.pop_back();
+
+        if (cur->get_op() == And) {
+            for (auto it = cur->begin(); it != cur->end(); ++it)
+                stack.push_back(*it);
+        } else atoms.push_back(cur);
+    }
+    return atoms;
+}
 
 
 
@@ -112,7 +126,7 @@ int main(int argc, char* argv[]) {
 
     sim.init();
     sim.set_input({},{});
-    int success = 0;
+    
 
     std::vector<TermVec> iteration_formulas;
     
@@ -125,32 +139,33 @@ int main(int argc, char* argv[]) {
 
     TermVec constraints = sim.all_assumptions();
     std::cout << "[Simulation] constraints: " << constraints.size() << std::endl;
-    for (const auto& constraint : constraints) {
-        solver->assert_formula(constraint);
-    }
     auto root = sim.interpret_state_expr_on_curr_frame(prop, false);
     UnorderedTermSet free_symbols;
     smt::get_free_symbols(root, free_symbols);
     read_simulation_inputs(input_txt_file, free_symbols, iteration_formulas, solver);
     int total = 0;
+    int success = 0;
+
+    auto atoms = flatten_and_constraints(constraints);
+
     for(auto c : iteration_formulas) {
-        
+        int sat_this = 0;
         solver->push();
         for (const auto& eq : c) {
             solver->assert_formula(eq);
         }
-        if (solver->check_sat() == SAT) {
-            // std::cout << "[Simulation] Iteration " << i
-            //           << " is SAT." << std::endl;
-            success++;
-            total ++;
-        } else {
-            // std::cout << "[Simulation] Iteration " << i
-            //           << " is UNSAT." << std::endl;
-            total ++;
+        for(const auto con : constraints) {
+            Result r = solver->check_sat_assuming({con});
+            if(r.is_sat()){
+                sat_this ++;
+                total ++;
+                success ++;
+            } else {
+                total ++;
+            }
         }
+        std::cout << "[Rate] " << sat_this << " of " << constraints.size() << std::endl;
         solver->pop();
-        
     }
 
     std::cout << "[Simulation] Successful checks: " << total << ", success :" << success << std::endl;

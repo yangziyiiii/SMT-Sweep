@@ -7,8 +7,8 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <gmp.h>
+#include <iostream>
 #include "gmpxx.h"
-using namespace smt;
 using namespace std;
 
 //----------------CONFIG--------------

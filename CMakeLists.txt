@@ -163,6 +163,8 @@ set(SOURCES
     "${PROJECT_SOURCE_DIR}/framework/state_simplify.cpp"
     "${PROJECT_SOURCE_DIR}/framework/egraph/json_export.cpp"
     "${PROJECT_SOURCE_DIR}/utils/logger.cpp"
+    "${PROJECT_SOURCE_DIR}/sweeper/node_data.cpp"
+    "${PROJECT_SOURCE_DIR}/sweeper/sweeper_engine.cpp"
 )
 
 file(GLOB HEADER_FILES "${PROJECT_SOURCE_DIR}/deps/*.h")
@@ -316,6 +318,12 @@ endif()
 
 add_executable(bmc "apps/bmc.cpp")
 target_link_libraries(bmc wasim-lib)
+
+add_executable(comb "apps/comb.cpp")
+target_link_libraries(comb wasim-lib)
+
+add_executable(sweep "apps/main.cpp")
+target_link_libraries(sweep wasim-lib)
 
 add_executable(ccheck "apps/constriants_check.cpp")
 target_link_libraries(ccheck wasim-lib)
