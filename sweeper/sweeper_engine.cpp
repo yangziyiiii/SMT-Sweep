@@ -26,7 +26,6 @@ void pre_collect_constants(const std::vector<Term>& traversal_roots,
         if (substitution_map.find(current) != substitution_map.end()) continue;
 
         if (current->is_value()) {
-            // 常量批量填充仿真数据（BOOL → "1/0"，BV → 去掉 "#b" 前缀）
             if(current->get_sort()->get_sort_kind() == BOOL){
                 std::string bitval = (current->to_string() == "true") ? "1" : "0";
                 for (int i = 0; i < num_iterations; ++i)
@@ -47,27 +46,32 @@ void pre_collect_constants(const std::vector<Term>& traversal_roots,
     }
 }
 
-// // 后序遍历 + 等价检测（哈希 → 仿真对齐 → 必要时 SAT 验证）
+// 后序遍历 + 等价检测（哈希 → 仿真对齐 → 必要时 SAT 验证）
 void post_order(const Term & root,
                 std::unordered_map<Term, NodeData> & node_data_map,
                 std::unordered_map<uint32_t, TermVec> & hash_term_map,
                 std::unordered_map<Term, Term> & substitution_map,
                 const std::unordered_map<Term, std::unordered_map<std::string, std::string>> & all_luts,
-                int & count, int & unsat_count, int & sat_count,
-                SmtSolver & solver, int & num_iterations, bool dump_enable,
-                const TermVec & input_terms,
-                int timeout_ms, bool debug,
-                std::string & dump_file_path, std::string & load_file_path,
+                int & count, 
+                int & unsat_count, 
+                int & sat_count,
+                SmtSolver & solver, 
+                int & num_iterations, 
+                bool dump_enable,
+                int timeout_ms, 
+                bool debug,
+                std::string & dump_file_path, 
+                std::string & load_file_path,
                 std::chrono::milliseconds & total_sat_time,
                 std::chrono::milliseconds & total_unsat_time
 ) {
     // 统计总节点
     int total_nodes = 0, processed_nodes = 0;
     count_total_nodes(root, total_nodes);
+    int next_progress_milestone = 5;
 
     std::stack<std::pair<Term,bool>> node_stack;
     node_stack.push({root,false});
-
     while(!node_stack.empty()) {
         auto & [current, visited] = node_stack.top();
 
@@ -75,9 +79,7 @@ void post_order(const Term & root,
             node_stack.pop(); continue;
         }
 
-        // children ready
         TermVec children(current->begin(), current->end());
-
 
         if(!visited) {
             for(Term child : current) {
@@ -122,11 +124,11 @@ void post_order(const Term & root,
                                                         num_iterations, hash_term_map,
                                                         node_data_map, substitution_map, debug);
 
-                if (result.found && result.term_eq) {
+                if (result.found && result.term_eq) { // term_eq is the same as cnode
                     substitution_map.insert({current, result.term_eq});
                 } else {
                     for (const auto & t : result.terms_for_solving) {
-                        if (unsat_count >= 30 && sat_count >= 100) break;
+                        if (unsat_count >= 30 && sat_count >= 1) break; //FIXME
 
                         solver->push();
                         auto eq = solver->make_term(Equal, t, cnode);
@@ -139,18 +141,16 @@ void post_order(const Term & root,
                         auto elapsed = duration.count();
                         count++;
 
-                        if (elapsed >= timeout_ms) {
-                            std::cout << "t"; std::cout.flush();
-                            total_sat_time += duration;
-                            solver->pop();
-                            continue;
-                        }
-
                         if (res.is_unsat()) {
                             total_unsat_time += duration;
                             unsat_count++;
                             term_eq = t;
-                            substitution_map.insert({current, t});
+                            substitution_map.insert({current, t}); //FIXME
+                            // if(is_t1_deeper_than_t2(t, cnode)) {
+                            //     substitution_map.insert({current, cnode});
+                            // } else {
+                            //     substitution_map.insert({current, t});
+                            // }
                             solver->pop();
                             break;
                         } else {
@@ -171,6 +171,13 @@ void post_order(const Term & root,
                 }
                 processed_nodes++;   
             }
+
+            //progress tracking
+            while (processed_nodes * 100 / total_nodes >= next_progress_milestone) {
+                std::cout << "[Progress] " << next_progress_milestone << "% (" << processed_nodes << "/" << total_nodes << " nodes processed)\n";
+                next_progress_milestone += 10;
+            }
+
             node_stack.pop();
         }
     }

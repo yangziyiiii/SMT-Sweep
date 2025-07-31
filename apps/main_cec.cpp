@@ -15,6 +15,7 @@ using namespace wasim;
 
 int main(int argc, char* argv[])
 {
+    silence_cout();
     Config config;
     if (!parse_arguments(argc, argv, config)) return EXIT_FAILURE;
 
@@ -40,6 +41,8 @@ int main(int argc, char* argv[])
     // 解析 BTOR2
     TransitionSystem sts(solver);
     BTOR2Encoder btor_parser(config.btor2_file, sts, "a::");
+
+    restore_cout();
 
     const auto& input_terms = btor_parser.inputsvec();
 
@@ -73,26 +76,26 @@ int main(int argc, char* argv[])
         hash_term_map[node_data_map[i].hash()].push_back(i);
     }
 
-    std::cout << "Simulation done.\n";
-
     solver->assert_formula(sts.init());
     for (const auto & c : constraints) {
         solver->assert_formula(c);
     }
 
-    int i = 0;
+    int i = 0, total_nodes = 0;
     int count = 0, unsat_count = 0, sat_count = 0;
     std::chrono::milliseconds total_sat_time(0), total_unsat_time(0);
 
     for (auto root : property) {
         
+        count_total_nodes(root, total_nodes);
+        std::cout << "Total nodes : " << total_nodes << std::endl;
+
         pre_collect_constants({root}, node_data_map, hash_term_map, substitution_map, config.simulation_iterations);
         post_order(root, node_data_map, hash_term_map, substitution_map, all_luts,
                    count, unsat_count, sat_count, solver, config.simulation_iterations, config.dump_smt,
-                   input_terms, config.property_check_timeout_ms, config.debug,
+                   config.property_check_timeout_ms, config.debug,
                    config.dump_input_file, config.load_input_file,
                    total_sat_time, total_unsat_time);
-        std::cout << "Traverse done." << std::endl;
 
         root = substitution_map.at(root);
         solver->push();

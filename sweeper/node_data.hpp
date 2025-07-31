@@ -121,6 +121,8 @@ void simulate_leaf_node(const Term & current,
 
 void count_total_nodes(const Term& root, int& total_nodes);
 
+bool is_t1_deeper_than_t2(const Term & t1, const Term & t2);
+
 // 其他在 sweeping 阶段会调用的工具
 struct TryFindResult {
     bool found;

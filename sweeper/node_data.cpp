@@ -347,6 +347,38 @@ TryFindResult try_find_equiv_term(const Term & cnode,
     return result;
 }
 
+// using some heuristic algorithm
+TryFindResult try_find_equiv_term_heur(const Term & cnode,
+                                  const uint32_t & current_hash,
+                                  const NodeData & sim_data,
+                                  int & num_iterations,
+                                  const std::unordered_map<uint32_t, TermVec> & hash_term_map,
+                                  const std::unordered_map<Term, NodeData> & node_data_map,
+                                  const std::unordered_map<Term, Term> & substitution_map,
+                                  bool & debug) {
+    TryFindResult result{false, nullptr, {}};
+    auto ht = hash_term_map.find(current_hash);
+    if (ht == hash_term_map.end()) return result;
+
+    const auto & terms_to_check = ht->second;
+    const auto & simv = sim_data.get_simulation_data();
+
+    for (const auto & t : terms_to_check) {
+        if (t == cnode) { result.found = true; result.term_eq = t; return result; }
+        if (t->get_sort() != cnode->get_sort()) continue;
+        auto it = node_data_map.find(t);
+        if (it == node_data_map.end()) continue;
+
+        const auto & es = it->second.get_simulation_data();
+        bool match = true;
+        for (int i = 0; i < num_iterations; ++i) {
+            if (btor_bv_compare(*es[i], *simv[i]) != 0) { match = false; break; }
+        }
+        if (match) result.terms_for_solving.push_back(t);
+    }
+    return result;
+}
+
 smt::Term and_vec(const TermVec & v, SmtSolver & solver)
 {
     if (v.empty()) return solver->make_term(true);
@@ -423,5 +455,43 @@ smt::Term get_first_unreducible_term (smt::TermList & assumption_list,
     }
     return nullptr;
 }
+
+
+int compute_ast_level(const Term & t, std::unordered_map<Term, int> & memo) {
+    // 若已缓存则直接返回
+    if (memo.find(t) != memo.end()) {
+        return memo[t];
+    }
+
+    // 叶子节点（常量或符号）level 为 1
+    if (t->is_symbolic_const() || t->is_value()) {
+        memo[t] = 1;
+        return 1;
+    }
+
+    // 递归获取所有子节点的最大层级
+    int max_child_level = 0;
+    for (const Term & child : *t) {
+        int child_level = compute_ast_level(child, memo);
+        if (child_level > max_child_level) {
+            max_child_level = child_level;
+        }
+    }
+
+    // 当前节点的level是子节点最大值 + 1
+    memo[t] = max_child_level + 1;
+    return memo[t];
+}
+
+// 若 t1 的 AST 层级更深，则返回 true，否则返回 false
+bool is_t1_deeper_than_t2(const Term & t1, const Term & t2) {
+    std::unordered_map<Term, int> memo;
+
+    int level1 = compute_ast_level(t1, memo);
+    int level2 = compute_ast_level(t2, memo);
+
+    return level1 > level2;
+}
+
 
 } // namespace sweeper

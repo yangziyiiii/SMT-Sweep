@@ -319,6 +319,8 @@ endif()
 add_executable(bmc "apps/main_bmc.cpp")
 target_link_libraries(bmc wasim-lib)
 
+add_executable(bzla_bmc "apps/bzla_bmc.cpp")
+target_link_libraries(bzla_bmc wasim-lib)
 
 add_executable(sweep "apps/main_cec.cpp")
 target_link_libraries(sweep wasim-lib)

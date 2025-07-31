@@ -15,8 +15,33 @@
 using namespace sweeper;
 using namespace wasim;
 
+inline bool check_bmc_result(const smt::Term & prop,
+                             const smt::TermVec & assumptions,
+                             smt::SmtSolver & solver,
+                             bool dump_enable,
+                             const std::string & base_file_name,
+                             int bound,
+                             int & solve_time_ms
+) {
+    solver->push();
+    for (const auto & a : assumptions) {
+        solver->assert_formula(a);
+    }
+    solver->assert_formula(solver->make_term(smt::Not, prop));
 
-int main(int argc, char* argv[]) {
+    auto start = std::chrono::high_resolution_clock::now();
+    auto res = solver->check_sat();
+    auto end = std::chrono::high_resolution_clock::now();
+    solve_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    solver->pop();
+
+    if (res.is_unsat()) return true;
+    if (res.is_sat()) return false;
+    throw std::runtime_error("[check_bmc_result] UNKNOWN result from solver.");
+}
+
+int main(int argc, char* argv[])
+{
     silence_cout();
     Config config;
     if (!parse_arguments(argc, argv, config)) return EXIT_FAILURE;
@@ -76,31 +101,8 @@ int main(int argc, char* argv[]) {
     smt::get_free_symbols(root, free_symbols);
     std::cout << "[INPUT] Free symbols: " << free_symbols.size() << "\n";
 
-    initialize_arrays({&sts}, all_luts, substitution_map, config.debug);
-    simulation(free_symbols, config.simulation_iterations, node_data_map,
-               config.dump_input_file, config.load_input_file);
-
-    for (const auto & s : free_symbols) {
-        if (node_data_map[s].get_simulation_data().size() != static_cast<size_t>(config.simulation_iterations)) {
-            throw std::runtime_error("[ERROR] Simulation mismatch for " + s->to_string());
-        }
-        substitution_map[s] = s;
-        hash_term_map[node_data_map[s].hash()].push_back(s);
-    }
-
-    int count = 0;
-    int unsat_count = 0;
-    int sat_count = 0;
     std::chrono::milliseconds total_sat_time(0);
     std::chrono::milliseconds total_unsat_time(0);
-
-    post_order(root, node_data_map, hash_term_map, substitution_map,
-               all_luts, count, unsat_count, sat_count, solver,
-               config.simulation_iterations, config.dump_smt,
-               config.solver_timeout_ms,
-               config.debug, config.dump_input_file, config.load_input_file,
-               total_sat_time, total_unsat_time);
-    root = substitution_map.at(root);
 
     auto pre_done = std::chrono::high_resolution_clock::now();
     auto pre_time = std::chrono::duration_cast<std::chrono::milliseconds>(pre_done - program_start).count();
@@ -120,24 +122,13 @@ int main(int argc, char* argv[]) {
 
     if (res.is_unsat()) {
         total_unsat_time += std::chrono::milliseconds(solve_time_ms);
-        std::cout << "[RESULT] Bound " << config.bound << " passed.\n";
+        std::cout << "[RESULT] Bound " << config.bound << " passed."<<std::flush;
     } else if (res.is_sat()) {
         total_sat_time += std::chrono::milliseconds(solve_time_ms);
-        std::cout << "[RESULT] Failed at bound " << config.bound << "\n";
+        std::cout << "[RESULT] Failed at bound " << config.bound << std::flush;
     } else {
         std::cerr << "[ERROR] Solver returned UNKNOWN.\n";
     }
-
-    std::cout << "Sweeping: " << count
-            << ", [UNSAT] " << unsat_count << " ("
-            << total_unsat_time.count()/1000.0 << " s), "
-            << "[SAT] " << sat_count << " ("
-            << total_sat_time.count()/1000.0 << " s)\n";
-
-    std::cout << "[Hash Map Size] " << hash_term_map.size() << "\n";
-    std::cout << "[Substitution Map Size] " << substitution_map.size() << "\n";
-    std::cout << "[Node Data Map Size] " << node_data_map.size() << "\n";
-
 
 
 

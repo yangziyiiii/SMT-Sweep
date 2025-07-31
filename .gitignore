@@ -45,5 +45,4 @@ output/
 .scala-build/
 design/
 sim_pattern/
-sweeper/
 spi_experiments/

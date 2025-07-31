@@ -10,6 +10,8 @@
 #include <getopt.h>
 #include <string>
 #include <cstdlib>
+#include <fstream>
+#include <streambuf>
 
 namespace sweeper {
 
@@ -120,5 +122,19 @@ public:
         mpz_urandomb(rand_num, state, num);
     }
 };
+
+inline std::streambuf* g_original_cout_buf = nullptr;
+inline std::ofstream g_null_stream;
+
+inline void silence_cout() {
+    g_null_stream.open("/dev/null");
+    g_original_cout_buf = std::cout.rdbuf(); // 备份
+    std::cout.rdbuf(g_null_stream.rdbuf());  // 重定向到 /dev/null
+}
+
+inline void restore_cout() {
+    std::cout.rdbuf(g_original_cout_buf);    // 恢复原始输出
+    g_null_stream.close();
+}
 
 } // namespace sweeper
