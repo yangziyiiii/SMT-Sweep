@@ -84,7 +84,7 @@ int main(int argc, char* argv[]) {
         if (node_data_map[s].get_simulation_data().size() != static_cast<size_t>(config.simulation_iterations)) {
             throw std::runtime_error("[ERROR] Simulation mismatch for " + s->to_string());
         }
-        substitution_map[s] = s;
+        // substitution_map[s] = s;
         hash_term_map[node_data_map[s].hash()].push_back(s);
     }
 

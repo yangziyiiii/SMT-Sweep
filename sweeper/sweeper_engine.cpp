@@ -91,14 +91,14 @@ void post_order(const Term & root,
         } else {
             if(current->is_value()) {
                 simulate_constant_node(current, num_iterations, node_data_map);
-                substitution_map.insert({current, current});
+                substitution_map.insert_or_assign(current, current);
                 hash_term_map[node_data_map[current].hash()].push_back(current);
                 processed_nodes++;
             }
 
             else if(current->is_symbolic_const() && current->get_op().is_null()) {
                 simulate_leaf_node(current, num_iterations, node_data_map, dump_file_path, load_file_path);
-                substitution_map.insert({current, current});
+                substitution_map.insert_or_assign(current, current);
                 processed_nodes++;
             }
 
@@ -112,6 +112,7 @@ void post_order(const Term & root,
                 for (size_t i = 0; i < children.size(); ++i)
                     if (children_substituted[i] != children[i]) { substitution_happened = true; break; }
 
+                // create a new term with the substituted children
                 auto op_type = current->get_op();
                 Term cnode = substitution_happened ? solver->make_term(op_type, children_substituted) : current;
 

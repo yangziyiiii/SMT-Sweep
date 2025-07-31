@@ -92,14 +92,7 @@ int main(int argc, char* argv[])
         solver->assert_formula(c);
     }
 
-    std::unordered_map<smt::Term, NodeData> node_data_map;
-    std::unordered_map<uint32_t, smt::TermVec> hash_term_map;
-    std::unordered_map<smt::Term, smt::Term> substitution_map;
-    std::unordered_map<smt::Term, std::unordered_map<std::string, std::string>> all_luts;
-
-    smt::UnorderedTermSet free_symbols;
-    smt::get_free_symbols(root, free_symbols);
-    std::cout << "[INPUT] Free symbols: " << free_symbols.size() << "\n";
+    
 
     std::chrono::milliseconds total_sat_time(0);
     std::chrono::milliseconds total_unsat_time(0);
@@ -113,8 +106,11 @@ int main(int argc, char* argv[])
 
     solver->push();
     solver->assert_formula(solver->make_term(smt::Not, root));
+    solver->dump_smt2(config.btor2_file + ".smt2");
     auto res = solver->check_sat();
     solver->pop();
+
+    
 
     auto solving_end = std::chrono::high_resolution_clock::now();
     solve_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(solving_end - solving_start).count();
@@ -122,10 +118,10 @@ int main(int argc, char* argv[])
 
     if (res.is_unsat()) {
         total_unsat_time += std::chrono::milliseconds(solve_time_ms);
-        std::cout << "[RESULT] Bound " << config.bound << " passed."<<std::flush;
+        std::cout << "[RESULT] Bound " << config.bound << " passed."<<std::endl;
     } else if (res.is_sat()) {
         total_sat_time += std::chrono::milliseconds(solve_time_ms);
-        std::cout << "[RESULT] Failed at bound " << config.bound << std::flush;
+        std::cout << "[RESULT] Failed at bound " << config.bound << std::endl;
     } else {
         std::cerr << "[ERROR] Solver returned UNKNOWN.\n";
     }

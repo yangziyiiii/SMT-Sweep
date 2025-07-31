@@ -349,13 +349,13 @@ TryFindResult try_find_equiv_term(const Term & cnode,
 
 // using some heuristic algorithm
 TryFindResult try_find_equiv_term_heur(const Term & cnode,
-                                  const uint32_t & current_hash,
-                                  const NodeData & sim_data,
-                                  int & num_iterations,
-                                  const std::unordered_map<uint32_t, TermVec> & hash_term_map,
-                                  const std::unordered_map<Term, NodeData> & node_data_map,
-                                  const std::unordered_map<Term, Term> & substitution_map,
-                                  bool & debug) {
+                                       const uint32_t & current_hash,
+                                       const NodeData & sim_data,
+                                       int & num_iterations,
+                                       const std::unordered_map<uint32_t, TermVec> & hash_term_map,
+                                       const std::unordered_map<Term, NodeData> & node_data_map,
+                                       const std::unordered_map<Term, Term> & substitution_map,
+                                       bool & debug) {
     TryFindResult result{false, nullptr, {}};
     auto ht = hash_term_map.find(current_hash);
     if (ht == hash_term_map.end()) return result;
@@ -376,6 +376,12 @@ TryFindResult try_find_equiv_term_heur(const Term & cnode,
         }
         if (match) result.terms_for_solving.push_back(t);
     }
+
+    //here we get a terms_for_solving vector
+    //then we need to reorder this vector using heuristic algorithm
+    //首先比较cnode和terms_for_solving中的每个term的sim_data是不是0或者1
+
+
     return result;
 }
 
