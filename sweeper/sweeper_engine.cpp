@@ -63,7 +63,8 @@ void post_order(const Term & root,
                 std::string & dump_file_path, 
                 std::string & load_file_path,
                 std::chrono::milliseconds & total_sat_time,
-                std::chrono::milliseconds & total_unsat_time
+                std::chrono::milliseconds & total_unsat_time,
+                std::chrono::milliseconds & ordering_time
 ) {
     // 统计总节点
     int total_nodes = 0, processed_nodes = 0;
@@ -121,15 +122,22 @@ void post_order(const Term & root,
                 auto current_hash = sim_data.hash();
 
                 Term term_eq = nullptr;
-                TryFindResult result = try_find_equiv_term(cnode, current_hash, sim_data,
+
+                auto ordering_start = std::chrono::high_resolution_clock::now();
+                TryFindResult result = try_find_equiv_term_heur(cnode, current_hash, sim_data,
                                                         num_iterations, hash_term_map,
                                                         node_data_map, substitution_map, debug);
+                auto ordering_end = std::chrono::high_resolution_clock::now();
+                auto ordering_duration = std::chrono::duration_cast<std::chrono::milliseconds>(ordering_end - ordering_start);
+                auto ordering_elapsed = ordering_duration.count();
+                ordering_time += ordering_duration;
 
                 if (result.found && result.term_eq) { // term_eq is the same as cnode
                     substitution_map.insert({current, result.term_eq});
                 } else {
+                    auto rank_idx = 0;
                     for (const auto & t : result.terms_for_solving) {
-                        if (unsat_count >= 30 && sat_count >= 1) break; //FIXME
+                        // if (unsat_count >= 30 && sat_count >= 100) break; //FIXME
 
                         solver->push();
                         auto eq = solver->make_term(Equal, t, cnode);
@@ -152,6 +160,15 @@ void post_order(const Term & root,
                             // } else {
                             //     substitution_map.insert({current, t});
                             // }
+
+                            /* ---------- 记录并打印命中排名 ---------- */
+                            result.hit_rank = static_cast<int>(rank_idx);
+                            if (result.hit_rank != 0){
+                            std::cout << "[HIT]  "
+                                      << "   (rank " << rank_idx << " / "
+                                      << result.terms_for_solving.size()-1
+                                      << ", time " << elapsed << " ms)\n";
+                            }
                             solver->pop();
                             break;
                         } else {
@@ -159,7 +176,8 @@ void post_order(const Term & root,
                             sat_count++;
                             fill_simulation_data_for_all_nodes(node_data_map, solver, num_iterations, substitution_map, all_luts);
                         }
-                         solver->pop();
+                        ++rank_idx;
+                        solver->pop();
                     }
                 }
 

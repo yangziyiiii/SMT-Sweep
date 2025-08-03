@@ -91,20 +91,24 @@ int main(int argc, char* argv[]) {
     int count = 0;
     int unsat_count = 0;
     int sat_count = 0;
+    int total_nodes = 0;
     std::chrono::milliseconds total_sat_time(0);
     std::chrono::milliseconds total_unsat_time(0);
+    std::chrono::milliseconds ordering_time(0);
 
     post_order(root, node_data_map, hash_term_map, substitution_map,
                all_luts, count, unsat_count, sat_count, solver,
                config.simulation_iterations, config.dump_smt,
                config.solver_timeout_ms,
                config.debug, config.dump_input_file, config.load_input_file,
-               total_sat_time, total_unsat_time);
-    root = substitution_map.at(root);
+               total_sat_time, total_unsat_time, ordering_time);
 
+    root = substitution_map.at(root);
+    count_total_nodes(root, total_nodes);
     auto pre_done = std::chrono::high_resolution_clock::now();
     auto pre_time = std::chrono::duration_cast<std::chrono::milliseconds>(pre_done - program_start).count();
-    std::cout << "[Pre-processing] " << pre_time/1000.0 << " s\n";
+    std::cout << "[Pre-processing] " << pre_time/1000.0 << " s, total nodes: " << total_nodes << "\n";
+    std::cout << "[Ordering Time] " << ordering_time.count()/1000.0 << " s\n";
 
     int solve_time_ms = 0;
     auto solving_start = std::chrono::high_resolution_clock::now();

@@ -128,9 +128,19 @@ struct TryFindResult {
     bool found;
     Term term_eq;
     TermVec terms_for_solving;
+    int hit_rank = -1;
 };
 
 TryFindResult try_find_equiv_term(const Term & cnode,
+                                  const uint32_t & current_hash,
+                                  const NodeData & sim_data,
+                                  int & num_iterations,
+                                  const std::unordered_map<uint32_t, TermVec> & hash_term_map,
+                                  const std::unordered_map<Term, NodeData> & node_data_map,
+                                  const std::unordered_map<Term, Term> & substitution_map,
+                                  bool & debug);
+
+TryFindResult try_find_equiv_term_heur(const Term & cnode,
                                   const uint32_t & current_hash,
                                   const NodeData & sim_data,
                                   int & num_iterations,

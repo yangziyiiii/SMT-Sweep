@@ -29,6 +29,7 @@ void post_order(const smt::Term & root,
                 int timeout_ms, bool debug,
                 std::string & dump_file_path, std::string & load_file_path,
                 std::chrono::milliseconds & total_sat_time,
-                std::chrono::milliseconds & total_unsat_time);
+                std::chrono::milliseconds & total_unsat_time,
+                std::chrono::milliseconds & ordering_time);
 
 } // namespace sweeper

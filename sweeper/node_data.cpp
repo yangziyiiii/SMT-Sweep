@@ -347,6 +347,217 @@ TryFindResult try_find_equiv_term(const Term & cnode,
     return result;
 }
 
+//=================================================================
+//                     Modern Heuristic Algorithms
+//=================================================================
+
+std::size_t set_intersection_size(const std::vector<int>& a,
+                                  const std::vector<int>& b
+) {
+     /* 1. 选较小序列建哈希表 */
+    const std::vector<int>* small = &a;
+    const std::vector<int>* large = &b;
+    if (a.size() > b.size()) std::swap(small, large);
+
+    /* 2. 以 (元素数 ×2) 预留桶，负载因子≈0.5，避免 rehash */
+    std::unordered_set<int> lookup(small->begin(), small->end(),
+                                   small->size() * 2);
+
+    /* 3. 扫描较大序列统计命中 */
+    std::size_t cnt = 0;
+    for (int elem : *large)
+        if (lookup.count(elem)) ++cnt;
+
+    return cnt;
+}
+
+struct PairHash {
+    std::size_t operator()(const std::pair<int,int>& p) const noexcept
+    {
+        // 经典 64-bit splitmix64 组合
+        std::size_t h1 = static_cast<std::size_t>(p.first);
+        std::size_t h2 = static_cast<std::size_t>(p.second);
+
+        // mix h1
+        h1 ^= h1 >> 33;  h1 *= 0xff51afd7ed558ccdULL;
+        h1 ^= h1 >> 33;  h1 *= 0xc4ceb9fe1a85ec53ULL;
+        h1 ^= h1 >> 33;
+
+        // mix h2
+        h2 ^= h2 >> 33;  h2 *= 0xff51afd7ed558ccdULL;
+        h2 ^= h2 >> 33;  h2 *= 0xc4ceb9fe1a85ec53ULL;
+        h2 ^= h2 >> 33;
+
+        return h1 ^ (h2 + 0x9e3779b97f4a7c15ULL + (h1<<6) + (h1>>2));
+    }
+};
+
+std::size_t set_intersection_size(const std::vector<std::pair<int,int>>& a,
+                                  const std::vector<std::pair<int,int>>& b)
+{
+    using Edge = std::pair<int,int>;
+
+    /* 1. 选较小序列建表 */
+    const std::vector<Edge>* small = &a;
+    const std::vector<Edge>* large = &b;
+    if (a.size() > b.size()) std::swap(small, large);
+
+    /* 2. 建立哈希表，桶数≈元素数×2，负载因子≈0.5 */
+    std::unordered_set<Edge, PairHash> lookup(
+        small->begin(), small->end(), small->size() * 2);
+
+    /* 3. 扫描大序列统计命中 */
+    std::size_t cnt = 0;
+    for (const Edge& e : *large)
+        if (lookup.count(e)) ++cnt;
+
+    return cnt;
+}
+
+struct GraphEntry {
+    std::vector<int>                 vertices;
+    std::vector<std::pair<int,int>>  edges;
+};
+
+static std::unordered_map<int, GraphEntry> cache_each_node;
+static const GraphEntry& collect_nodes_edges(const Term& term
+){
+
+    auto it = cache_each_node.find(term->get_id());
+    if (it != cache_each_node.end()) return it->second;
+
+    GraphEntry entry;
+    std::stack<Term> st;
+    st.push(term);
+    std::unordered_set<int> visited;
+    while (!st.empty()) {
+        Term cur = st.top(); 
+        st.pop();
+        auto id_cur = static_cast<int>(cur->get_id());
+        if (!visited.insert(id_cur).second) continue;  // 已访问
+        entry.vertices.push_back(id_cur);
+        for (const Term& child : *cur) {
+            int id_ch = static_cast<int>(child->get_id());
+            entry.edges.emplace_back(id_cur, id_ch);
+            st.push(child);
+        }
+    }
+    auto [iter, _] = cache_each_node.emplace(term->get_id(), std::move(entry));
+    return iter->second;
+}
+
+
+double computeVEO(const Term& t1, 
+                  const Term& t2, 
+                  double alpha = 0.5){
+    const GraphEntry& g1 = collect_nodes_edges(t1);
+    const GraphEntry& g2 = collect_nodes_edges(t2);
+    auto& v1 = g1.vertices;
+    auto& v2 = g2.vertices;
+    auto& e1 = g1.edges;
+    auto& e2 = g2.edges;
+
+    size_t v_inter = set_intersection_size(v1, v2);
+    size_t e_inter = set_intersection_size(e1, e2);
+
+    double v_overlap = static_cast<double>(v_inter) / (v1.size() + v2.size() - v_inter + 1e-12);
+    double e_overlap = static_cast<double>(e_inter) / (e1.size() + e2.size() - e_inter + 1e-12);
+    return alpha * v_overlap + (1.0 - alpha) * e_overlap;
+}
+
+
+
+struct WLBagEntry {
+    std::unordered_map<std::size_t,int> bag;   // 颜色计数
+};
+
+static std::unordered_map<int, WLBagEntry> wl_cache; 
+using Color = std::size_t;
+static std::unordered_map<Color,int>
+WL_feature_bag_raw(const Term& root, int h)
+{
+    std::unordered_map<int, std::vector<int>> adj;
+    std::vector<int> nodes;
+    nodes.reserve(128);
+
+    std::stack<Term> st; st.push(root);
+    while (!st.empty()) {
+        Term cur = st.top(); st.pop();
+        int id = static_cast<int>(cur->get_id());
+        if (!adj.emplace(id, std::vector<int>{}).second) continue; // 已插入
+        nodes.push_back(id);
+        for (const Term& ch : *cur) {
+            int cid = static_cast<int>(ch->get_id());
+            adj[id].push_back(cid);
+            st.push(ch);
+        }
+    }
+
+    std::unordered_map<int,Color> color;
+    color.reserve(nodes.size());
+    for (int n : nodes) color[n] = adj[n].size();
+
+    for (int iter = 0; iter < h; ++iter) {
+        bool changed = false;
+        std::unordered_map<int,Color> new_color;
+        new_color.reserve(nodes.size());
+
+        for (int n : nodes) {
+            std::vector<Color> multiset;
+            multiset.reserve(adj[n].size());
+            for (int nb : adj[n]) multiset.push_back(color[nb]);
+            std::sort(multiset.begin(), multiset.end());
+            Color hash = 17;
+            for (Color c : multiset) hash = hash * 31u + c;
+            new_color[n] = hash;
+            if (hash != color[n]) changed = true;
+        }
+        color.swap(new_color);
+        if (!changed) break;                 // ★ 已收敛，提前退出
+    }
+
+    std::unordered_map<Color,int> bag;
+    bag.reserve(color.size());
+    for (auto& kv : color) ++bag[kv.second];
+    return bag;
+}
+
+
+/* ---------- 获取词袋（带缓存） ---------- */
+static const std::unordered_map<Color,int>&
+get_WL_bag_cached(const Term& root, int depth = 2)
+{
+    int id = static_cast<int>(root->get_id());
+    auto it = wl_cache.find(id);
+    if (it != wl_cache.end()) return it->second.bag;
+
+    WLBagEntry e;
+    e.bag = WL_feature_bag_raw(root, depth);
+    auto [iter, _] = wl_cache.emplace(id, std::move(e));
+    return iter->second.bag;
+}
+
+static double compute_WL_kernel(const Term& t1,
+                                const Term& t2,
+                                int depth = 2)
+{
+    const auto& b1 = get_WL_bag_cached(t1, depth);
+    const auto& b2 = get_WL_bag_cached(t2, depth);
+
+    double dot = 0, n1 = 0, n2 = 0;
+    for (auto& kv : b1) {
+        int c1 = kv.second;
+        n1 += c1 * c1;
+        auto it = b2.find(kv.first);
+        if (it != b2.end()) dot += c1 * it->second;
+    }
+    for (auto& kv : b2) n2 += kv.second * kv.second;
+
+    double norm = std::sqrt(n1 * n2) + 1e-12;
+    return dot / norm;
+}
+
+
 // using some heuristic algorithm
 TryFindResult try_find_equiv_term_heur(const Term & cnode,
                                        const uint32_t & current_hash,
@@ -358,32 +569,80 @@ TryFindResult try_find_equiv_term_heur(const Term & cnode,
                                        bool & debug) {
     TryFindResult result{false, nullptr, {}};
     auto ht = hash_term_map.find(current_hash);
-    if (ht == hash_term_map.end()) return result;
+    if (ht == hash_term_map.end()) return result; // 没有哈希匹配的项
 
     const auto & terms_to_check = ht->second;
     const auto & simv = sim_data.get_simulation_data();
 
     for (const auto & t : terms_to_check) {
-        if (t == cnode) { result.found = true; result.term_eq = t; return result; }
-        if (t->get_sort() != cnode->get_sort()) continue;
+        if (t == cnode) { 
+            result.found = true; 
+            result.term_eq = t;
+            return result; 
+        }
+        
+        if (t->get_sort() != cnode->get_sort()) continue;  // 排除类型不匹配的项
         auto it = node_data_map.find(t);
-        if (it == node_data_map.end()) continue;
+        if (it == node_data_map.end()) continue; // 排除未仿真的项
 
         const auto & es = it->second.get_simulation_data();
         bool match = true;
         for (int i = 0; i < num_iterations; ++i) {
-            if (btor_bv_compare(*es[i], *simv[i]) != 0) { match = false; break; }
+            if (btor_bv_compare(*es[i], *simv[i]) != 0) { 
+                match = false; // 仿真数据不匹配 
+                break; 
+            }
         }
         if (match) result.terms_for_solving.push_back(t);
     }
 
     //here we get a terms_for_solving vector
     //then we need to reorder this vector using heuristic algorithm
-    //首先比较cnode和terms_for_solving中的每个term的sim_data是不是0或者1
 
+    if (result.terms_for_solving.empty()) return result; // 如果没有找到匹配的项，直接返回
+    
+    //Vertex Edge Overlap, Weisfeiler–Lehman Kernel
+    struct Metric {
+        Term   t;
+        double veo;
+        double wl;
+    };
+    std::vector<Metric> feats;
+    feats.reserve(result.terms_for_solving.size());
+
+    constexpr double VEO_ALPHA   = 0.5;   // 顶点/边权重
+    constexpr int    WL_DEPTH    = 2;     // WL 迭代层数
+    constexpr double SCORE_BETA  = 0.6;   // VEO 与 WL 线性融合权重
+    constexpr double VEO_PRUNE   = 0.25;
+
+    for (const Term & cand : result.terms_for_solving) {
+        double veo = computeVEO(cnode, cand, VEO_ALPHA);
+        double wl  = 0.0;
+        if (veo >= VEO_PRUNE)
+            wl = compute_WL_kernel(cnode, cand, WL_DEPTH);   // 只算“更像”的候选
+        feats.push_back({cand, veo, wl});
+    }
+
+    //------------------------------------------------------------------
+    // 3. 排序：按 β·VEO + (1-β)·WL 降序
+    //------------------------------------------------------------------
+    std::stable_sort(feats.begin(), feats.end(),
+        [](const Metric &a, const Metric &b) {
+            double score_a = SCORE_BETA * a.veo + (1.0 - SCORE_BETA) * a.wl;
+            double score_b = SCORE_BETA * b.veo + (1.0 - SCORE_BETA) * b.wl;
+            if (score_a != score_b) return score_a > score_b;     // 高分优先
+            return a.t.get() < b.t.get();                         // tie-break
+        });
+
+    result.terms_for_solving.clear();
+    for (auto & m : feats) result.terms_for_solving.push_back(m.t);
+
+
+    
 
     return result;
 }
+
 
 smt::Term and_vec(const TermVec & v, SmtSolver & solver)
 {

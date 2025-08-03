@@ -1,7 +1,7 @@
 #!/bin/bash
 
-BZLA_DIR="./bzla_hls"
-SWEEPER_DIR="./sweeper_hls"
+BZLA_DIR="./hls_experiment_benchmarks/bzla_hls"
+SWEEPER_DIR="./hls_experiment_benchmarks/sweeper_hls"
 TMP_FILE="./compare_results.tmp"
 > "$TMP_FILE"
 
@@ -12,6 +12,9 @@ matched_files=0
 echo "[INFO] Comparing logs in: $BZLA_DIR vs $SWEEPER_DIR"
 
 shopt -s nullglob  # 防止 *.log 展开为空时报错
+
+total_bzla_time=0.0
+total_sweeper_time=0.0
 
 for bzla_log in "$BZLA_DIR"/*.log; do
     filename=$(basename "$bzla_log")
@@ -48,8 +51,9 @@ for bzla_log in "$BZLA_DIR"/*.log; do
 
     echo "$filename $bzla_solving $sweeper_solving $diff_percent $speed_ratio" >> "$TMP_FILE"
 
-    total_improvement=$(echo "$total_improvement + $diff_percent" | bc)
-    total_ratio=$(echo "$total_ratio + $speed_ratio" | bc)
+    total_bzla_time=$(echo "$total_bzla_time + $bzla_solving" | bc)
+    total_sweeper_time=$(echo "$total_sweeper_time + $sweeper_solving" | bc)
+
     ((matched_files++))
 done
 
@@ -59,8 +63,9 @@ if [[ $matched_files -eq 0 ]]; then
     exit 1
 fi
 
-avg_improvement=$(echo "scale=2; $total_improvement / $matched_files" | bc)
-avg_ratio=$(echo "scale=2; $total_ratio / $matched_files" | bc)
+avg_improvement=$(echo "scale=2; (1 - $total_sweeper_time / $total_bzla_time) * 100" | bc)
+avg_ratio=$(echo "scale=2; $total_bzla_time / $total_sweeper_time" | bc)
+
 
 echo
 echo "📊 Sweeper vs Bzla Summary:"

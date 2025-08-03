@@ -83,7 +83,7 @@ int main(int argc, char* argv[])
 
     int i = 0, total_nodes = 0;
     int count = 0, unsat_count = 0, sat_count = 0;
-    std::chrono::milliseconds total_sat_time(0), total_unsat_time(0);
+    std::chrono::milliseconds total_sat_time(0), total_unsat_time(0), ordering_time(0);
 
     for (auto root : property) {
         
@@ -95,7 +95,7 @@ int main(int argc, char* argv[])
                    count, unsat_count, sat_count, solver, config.simulation_iterations, config.dump_smt,
                    config.property_check_timeout_ms, config.debug,
                    config.dump_input_file, config.load_input_file,
-                   total_sat_time, total_unsat_time);
+                   total_sat_time, total_unsat_time, ordering_time);
 
         root = substitution_map.at(root);
         solver->push();
