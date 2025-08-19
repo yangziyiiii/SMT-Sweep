@@ -14,14 +14,12 @@ size_t NodeData::hash(const std::vector<BtorBitVectorPtr>& data) {
     size_t hash_val = 0;
     for (const auto & v : data) {
         auto clean_val = btor_bv_to_string(*v);
-        // 复用您原有的组合哈希
         sweeper::hashCombine(hash_val, clean_val);
     }
     return hash_val;
 }
 
 void create_lut(Term current, std::unordered_map<std::string, std::string>& lut) {
-    // 按 store 链构造 array 的索引-值 LUT（与原实现一致）【:contentReference[oaicite:44]{index=44}】
     while (current->get_op().prim_op == PrimOp::Store) {
         TermVec ch(current->begin(), current->end());
         auto array = ch[0];
@@ -557,6 +555,22 @@ static double compute_WL_kernel(const Term& t1,
     return dot / norm;
 }
 
+static double compute_beta(const std::vector<double>& vec_veo,
+                           const std::vector<double>& vec_wl)
+{
+    auto variance = [](const std::vector<double>& v){
+        if (v.empty()) return 0.0;
+        double mean = std::accumulate(v.begin(), v.end(), 0.0) / v.size();
+        double sum  = 0.0;
+        for (double x : v) sum += (x-mean)*(x-mean);
+        return sum / v.size();
+    };
+    double sv  = std::sqrt(variance(vec_veo));
+    double swl = std::sqrt(variance(vec_wl));
+    double denom = sv + swl + 1e-12;
+    return (denom < 1e-9) ? 0.5 : (1.0 - sv / denom);
+}
+
 
 // using some heuristic algorithm
 TryFindResult try_find_equiv_term_heur(const Term & cnode,
@@ -615,27 +629,49 @@ TryFindResult try_find_equiv_term_heur(const Term & cnode,
     constexpr double SCORE_BETA  = 0.6;   // VEO 与 WL 线性融合权重
     constexpr double VEO_PRUNE   = 0.25;
 
-    for (const Term & cand : result.terms_for_solving) {
+    // for (const Term & cand : result.terms_for_solving) {
+    //     double veo = computeVEO(cnode, cand, VEO_ALPHA);
+    //     double wl  = 0.0;
+    //     if (veo >= VEO_PRUNE)
+    //         wl = compute_WL_kernel(cnode, cand, WL_DEPTH);   // 只算“更像”的候选
+    //     feats.push_back({cand, veo, 0.0});
+    // }
+
+    std::vector<double> vec_veo, vec_wl;
+    vec_veo.reserve(result.terms_for_solving.size());
+    vec_wl .reserve(result.terms_for_solving.size());
+
+    for (const Term& cand : result.terms_for_solving) {
         double veo = computeVEO(cnode, cand, VEO_ALPHA);
+
         double wl  = 0.0;
-        if (veo >= VEO_PRUNE)
-            wl = compute_WL_kernel(cnode, cand, WL_DEPTH);   // 只算“更像”的候选
+        if (veo >= VEO_PRUNE)                 // ★ 低 VEO 的候选不再算 WL
+            wl = compute_WL_kernel(cnode, cand, WL_DEPTH);
+
         feats.push_back({cand, veo, wl});
+        vec_veo.push_back(veo);
+        vec_wl .push_back(wl);
     }
+
 
     //------------------------------------------------------------------
     // 3. 排序：按 β·VEO + (1-β)·WL 降序
     //------------------------------------------------------------------
-    std::stable_sort(feats.begin(), feats.end(),
-        [](const Metric &a, const Metric &b) {
-            double score_a = SCORE_BETA * a.veo + (1.0 - SCORE_BETA) * a.wl;
-            double score_b = SCORE_BETA * b.veo + (1.0 - SCORE_BETA) * b.wl;
-            if (score_a != score_b) return score_a > score_b;     // 高分优先
-            return a.t.get() < b.t.get();                         // tie-break
-        });
 
+    double BETA = compute_beta(vec_veo, vec_wl);
+    std::stable_sort(feats.begin(), feats.end(),
+        [&](const Metric& a, const Metric& b) {
+            double sa = BETA * a.veo + (1.0 - BETA) * a.wl;
+            double sb = BETA * b.veo + (1.0 - BETA) * b.wl;
+            if (sa != sb) return sa > sb;
+            return a.t.get() < b.t.get();
+    });
+
+    /* ---------- Top-K 推送后续 SAT ---------- */
+    constexpr int TOP_K = 8;          // 可按需要调大 / 调小
     result.terms_for_solving.clear();
-    for (auto & m : feats) result.terms_for_solving.push_back(m.t);
+    for (int i = 0; i < feats.size() && i < TOP_K; ++i)
+        result.terms_for_solving.push_back(feats[i].t);
 
 
     
@@ -662,7 +698,7 @@ bool all_substituted(const TermVec& children,
     return true;
 }
 
-// 仅在需要补齐（例如某些节点只生成了1个样本）时，按当前 substitution 补齐
+
 void fill_simulation_data_for_all_nodes(std::unordered_map<Term, NodeData>& node_data_map,
                                         SmtSolver& solver,
                                         int num_iterations,

@@ -1,0 +1,11 @@
+========== 2025-08-13 22:51:24 ==========
+[tool]   abc
+[cmd]    /data/ziyi/abc/abc -c "&r /data/ziyi/SMT-Sweep/design/hls_benchmarks/benchmarks/benchmark_20250728_141735_218_bnd_300.aig; &cec -m"
+--------------------------------------
+ABC command line: "&r /data/ziyi/SMT-Sweep/design/hls_benchmarks/benchmarks/benchmark_20250728_141735_218_bnd_300.aig; &cec -m".
+
+Assuming the current network is a single-output miter.
+Networks are equivalent.  Time =   830.07 sec
+[time] real=837.79 user=835.87 sys=1.60 maxrss=2623936KB
+======================================
+

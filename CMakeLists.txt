@@ -325,6 +325,9 @@ target_link_libraries(bzla_bmc wasim-lib)
 add_executable(sweep "apps/main_cec.cpp")
 target_link_libraries(sweep wasim-lib)
 
+add_executable(aes "apps/aes_check.cpp")
+target_link_libraries(aes wasim-lib)
+
 # add_executable(ccheck "apps/constriants_check.cpp")
 # target_link_libraries(ccheck wasim-lib)
 

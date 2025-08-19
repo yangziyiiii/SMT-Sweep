@@ -49,3 +49,6 @@ spi_experiments/
 bmc_logs/
 hls_experiment_action_40_with_cb/
 hls_experiment_benchmarks/
+hls_sec_experiment/
+experiment_heur/
+experiment_no_heur/

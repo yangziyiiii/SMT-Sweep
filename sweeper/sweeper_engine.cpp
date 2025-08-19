@@ -73,14 +73,20 @@ void post_order(const Term & root,
 
     std::stack<std::pair<Term,bool>> node_stack;
     node_stack.push({root,false});
+
+    //——— 配置：样本阈值（可根据需要调整/外传） ———//
+    const int NEED_UNSAT = 20;
+    const int NEED_SAT   = 1;
+
+     //——— 相位管理 ———//
+    bool apply_only = false;        // // false: 相位A（发现）；true: 相位B（仅应用）
+
     while(!node_stack.empty()) {
         auto & [current, visited] = node_stack.top();
 
         if(substitution_map.find(current) != substitution_map.end()) {
             node_stack.pop(); continue;
         }
-
-        TermVec children(current->begin(), current->end());
 
         if(!visited) {
             for(Term child : current) {
@@ -89,118 +95,151 @@ void post_order(const Term & root,
             }
             visited = true;
             continue;
-        } else {
-            if(current->is_value()) {
+        } 
+        
+        //——— 相位切换判定：达到样本阈值则进入“仅应用/传播”模式 ———//
+        if (!apply_only && (unsat_count >= NEED_UNSAT && sat_count >= NEED_SAT)) {
+            apply_only = true;
+            std::cout << "[Mode] Switch to Apply-Only.\n"; 
+        }
+        
+        
+        if(current->is_value()) {
+            if(!apply_only){
                 simulate_constant_node(current, num_iterations, node_data_map);
                 substitution_map.insert_or_assign(current, current);
                 hash_term_map[node_data_map[current].hash()].push_back(current);
-                processed_nodes++;
-            }
-
-            else if(current->is_symbolic_const() && current->get_op().is_null()) {
-                simulate_leaf_node(current, num_iterations, node_data_map, dump_file_path, load_file_path);
+            } else {
                 substitution_map.insert_or_assign(current, current);
-                processed_nodes++;
             }
+            processed_nodes++;
+            node_stack.pop();
 
-            else{
-                // 一般内部节点
-                bool substitution_happened = false;
-                TermVec children_substituted;
-                children_substitution(children, children_substituted, substitution_map);
-                if (children_substituted.size() != children.size())
-                    throw std::runtime_error("children_substitution size mismatch");
-                for (size_t i = 0; i < children.size(); ++i)
-                    if (children_substituted[i] != children[i]) { substitution_happened = true; break; }
-
-                // create a new term with the substituted children
-                auto op_type = current->get_op();
-                Term cnode = substitution_happened ? solver->make_term(op_type, children_substituted) : current;
-
-                NodeData sim_data;
-                compute_simulation(children_substituted, num_iterations, op_type, node_data_map, all_luts, sim_data);
-                auto current_hash = sim_data.hash();
-
-                Term term_eq = nullptr;
-
-                auto ordering_start = std::chrono::high_resolution_clock::now();
-                TryFindResult result = try_find_equiv_term_heur(cnode, current_hash, sim_data,
-                                                        num_iterations, hash_term_map,
-                                                        node_data_map, substitution_map, debug);
-                auto ordering_end = std::chrono::high_resolution_clock::now();
-                auto ordering_duration = std::chrono::duration_cast<std::chrono::milliseconds>(ordering_end - ordering_start);
-                auto ordering_elapsed = ordering_duration.count();
-                ordering_time += ordering_duration;
-
-                if (result.found && result.term_eq) { // term_eq is the same as cnode
-                    substitution_map.insert({current, result.term_eq});
-                } else {
-                    auto rank_idx = 0;
-                    for (const auto & t : result.terms_for_solving) {
-                        // if (unsat_count >= 30 && sat_count >= 100) break; //FIXME
-
-                        solver->push();
-                        auto eq = solver->make_term(Equal, t, cnode);
-                        solver->assert_formula(solver->make_term(Not, eq));
-
-                        auto start = std::chrono::high_resolution_clock::now();
-                        auto res = solver->check_sat();
-                        auto end = std::chrono::high_resolution_clock::now();
-                        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-                        auto elapsed = duration.count();
-                        count++;
-
-                        if (res.is_unsat()) {
-                            total_unsat_time += duration;
-                            unsat_count++;
-                            term_eq = t;
-                            substitution_map.insert({current, t}); //FIXME
-                            // if(is_t1_deeper_than_t2(t, cnode)) {
-                            //     substitution_map.insert({current, cnode});
-                            // } else {
-                            //     substitution_map.insert({current, t});
-                            // }
-
-                            /* ---------- 记录并打印命中排名 ---------- */
-                            result.hit_rank = static_cast<int>(rank_idx);
-                            if (result.hit_rank != 0){
-                            std::cout << "[HIT]  "
-                                      << "   (rank " << rank_idx << " / "
-                                      << result.terms_for_solving.size()-1
-                                      << ", time " << elapsed << " ms)\n";
-                            }
-                            solver->pop();
-                            break;
-                        } else {
-                            total_sat_time += duration;
-                            sat_count++;
-                            fill_simulation_data_for_all_nodes(node_data_map, solver, num_iterations, substitution_map, all_luts);
-                        }
-                        ++rank_idx;
-                        solver->pop();
-                    }
-                }
-
-                if (term_eq && term_eq != nullptr) {
-                    substitution_map.insert({current, term_eq});
-                } else {
-                    substitution_map.insert({current, cnode});
-                    hash_term_map[current_hash].push_back(cnode);
-                    node_data_map[cnode] = std::move(sim_data);
-                }
-                processed_nodes++;   
-            }
-
-            //progress tracking
+            // progress tracking
             while (processed_nodes * 100 / total_nodes >= next_progress_milestone) {
-                std::cout << "[Progress] " << next_progress_milestone << "% (" << processed_nodes << "/" << total_nodes << " nodes processed)\n";
+                std::cout << "[Progress] " << next_progress_milestone
+                          << "% (" << processed_nodes << "/" << total_nodes << " nodes processed)\n";
                 next_progress_milestone += 10;
             }
-
-            node_stack.pop();
+            continue;
         }
+
+        if(current->is_symbolic_const() && current->get_op().is_null()) {
+            if (!apply_only) {
+                simulate_leaf_node(current, num_iterations, node_data_map, dump_file_path, load_file_path);
+                substitution_map.emplace(current, current);
+            } else {
+                substitution_map.emplace(current, current);
+            }
+            processed_nodes++;
+            node_stack.pop();
+
+            // progress tracking
+            while (processed_nodes * 100 / total_nodes >= next_progress_milestone) {
+                std::cout << "[Progress] " << next_progress_milestone
+                          << "% (" << processed_nodes << "/" << total_nodes << " nodes processed)\n";
+                next_progress_milestone += 10;
+            }
+            continue;
+        }
+         
+        // 一般内部节点
+        TermVec children(current->begin(), current->end());
+        TermVec children_substituted;
+        children_substitution(children, children_substituted, substitution_map);
+        if (children_substituted.size() != children.size())
+            throw std::runtime_error("children_substitution size mismatch");
+
+        bool substitution_happened = false;
+        for (size_t i = 0; i < children.size(); ++i) {
+            if (children_substituted[i] != children[i]) { 
+                substitution_happened = true; 
+                break;
+            }
+        }
+        
+        // create a new term with the substituted children
+        auto op_type = current->get_op();
+        Term cnode = substitution_happened ? solver->make_term(op_type, children_substituted) : current;
+        // 相位B：仅应用/传播（彻底跳过昂贵操作）
+        if (apply_only) {
+            substitution_map.emplace(current, cnode);  // 结构哈希会自动合并语法等价
+            processed_nodes++;
+            node_stack.pop();
+
+            // progress tracking
+            while (processed_nodes * 100 / total_nodes >= next_progress_milestone) {
+                std::cout << "[Progress] " << next_progress_milestone
+                          << "% (" << processed_nodes << "/" << total_nodes << " nodes processed)\n";
+                next_progress_milestone += 10;
+            }
+            continue;
+        }
+
+        // —— 相位A：等价“发现”路径 —— //
+        NodeData sim_data;
+        compute_simulation(children_substituted, num_iterations, op_type, node_data_map, all_luts, sim_data);
+        auto current_hash = sim_data.hash();
+        Term term_eq = nullptr;
+
+        auto ordering_start = std::chrono::high_resolution_clock::now();
+        TryFindResult result = try_find_equiv_term(cnode, current_hash, sim_data,
+                                                num_iterations, hash_term_map,
+                                                node_data_map, substitution_map, debug);
+        auto ordering_end = std::chrono::high_resolution_clock::now();
+        auto ordering_duration = std::chrono::duration_cast<std::chrono::milliseconds>(ordering_end - ordering_start);
+        auto ordering_elapsed = ordering_duration.count();
+        ordering_time += ordering_duration;
+        if (result.found && result.term_eq) { // term_eq is the same as cnode
+            substitution_map.insert({current, result.term_eq});
+        } else {
+            for (const auto & t : result.terms_for_solving) {
+                if (unsat_count >= NEED_UNSAT && sat_count >= NEED_SAT) break;
+                solver->push();
+                auto eq = solver->make_term(Equal, t, cnode);
+                solver->assert_formula(solver->make_term(Not, eq));
+                auto start = std::chrono::high_resolution_clock::now();
+                auto res = solver->check_sat();
+                auto end = std::chrono::high_resolution_clock::now();
+                auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+                auto elapsed = duration.count();
+                count++;
+
+                if (res.is_unsat()) {
+                    total_unsat_time += duration;
+                    unsat_count++;
+                    term_eq = t;
+                    substitution_map.insert({current, t});
+                    solver->pop();
+                    break;
+                } else {
+                    total_sat_time += duration;
+                    sat_count++;
+                    fill_simulation_data_for_all_nodes(node_data_map, solver, num_iterations, substitution_map,all_luts); //FIXME
+                    solver->pop();
+                }
+            }
+        }
+
+        if (term_eq && term_eq != nullptr) {
+            substitution_map.insert_or_assign(current, term_eq);
+        } else {
+            substitution_map.insert_or_assign(current, cnode);
+            hash_term_map[current_hash].push_back(cnode);
+            node_data_map[cnode] = std::move(sim_data);
+        }
+        processed_nodes++;   
+        
+        //progress tracking
+        while (processed_nodes * 100 / total_nodes >= next_progress_milestone) {
+            std::cout << "[Progress] " << next_progress_milestone << "% (" << processed_nodes << "/" << total_nodes << " nodes processed)\n";
+            next_progress_milestone += 10;
+        }
+
+        node_stack.pop();
     }
 }
+
 
 
 
