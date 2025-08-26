@@ -1,8 +1,0 @@
-========== 2025-08-14 11:07:18 ==========
-[tool]   hybridcec
-[cmd]    /data/ziyi/data2/ziyi/Hybrid-CEC/hybrid_cec /data/ziyi/SMT-Sweep/design/hls_benchmarks/benchmarks/benchmark_20250728_141735_248_bnd_300.aig
---------------------------------------
-Networks are equivalent
-[time] real=2857.69 user=2837.72 sys=18.93 maxrss=53721864KB
-======================================
-

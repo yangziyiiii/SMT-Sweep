@@ -1,9 +1,0 @@
-========== 2025-08-14 11:54:56 ==========
-[tool]   hybridcec
-[cmd]    /data/ziyi/data2/ziyi/Hybrid-CEC/hybrid_cec /data/ziyi/SMT-Sweep/design/hls_benchmarks/benchmarks/benchmark_20250728_141735_234_bnd_300.aig
---------------------------------------
-Command exited with non-zero status 124
-[time] real=3600.04 user=3595.40 sys=3.41 maxrss=732708KB
-[error] Command exited with status 0
-======================================
-

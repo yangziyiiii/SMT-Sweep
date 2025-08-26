@@ -1,4 +1,0 @@
-kissat: error: can not read '_temp_.cnf'
-ABC command line: "&r /data/ziyi/SMT-Sweep/design/mul/mul_fix_10_one_output.aig; &kissat".
-
-CNF stats: Vars =   1546. Clauses =    7277. Literals =    22932. Time =     0.07 sec

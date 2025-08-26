@@ -1,4 +1,0 @@
-s UNSATISFIABLE
-ABC command line: "&r /data/ziyi/SMT-Sweep/design/mul/mul_fix_12_one_output.aig; &kissat".
-
-CNF stats: Vars =   2335. Clauses =   10923. Literals =    34224. Time =     0.09 sec
