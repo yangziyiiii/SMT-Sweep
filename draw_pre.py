@@ -14,17 +14,17 @@ timeout = 3600
 
 # 适合学术论文的高区分度配色（柔和 Set2 系列）
 tool_colors = {
-    'ABC':       '#B8DBB3',  # 浅绿
-    'Kissat':    '#E29135',  # 橙色
-    'HybridCEC': '#94C6CD',  # 浅蓝
-    'Bitwuzla':  '#719AAC',  # 蓝灰
+    'ABC':       "#1a93fc",  # 靛蓝
+    'Kissat':    "#F7DC6F",  # 朱红
+    'HybridCEC': "#66cd7f",  # 青翠
+    'Bitwuzla':  "#E74C3C",  # 暖棕
 }
 tools = list(tool_colors.keys())
 
 # 数据
 runtime_data = {
     'ABC':       [0.09, 21.83, 324.11, 'timeout', 'timeout', 'timeout'],
-    'Kissat':    [0.06, 4.75, 75.38, 1265.94, 'timeout', 'timeout'],
+    'Kissat':    [0.06, 4.75, 75.38, 1265.94, 'timeout', 2090.46],
     'HybridCEC': [0.13, 5.03, 156.89, 'timeout', 'timeout', 'timeout'],
     'Bitwuzla':  [0.01, 0.01, 0.01, 0.01, 0.01, 0.01],
 }
@@ -46,9 +46,9 @@ for i, tool in enumerate(tools):
         width=bar_width,
         color=tool_colors[tool],
         label=tool,
-        edgecolor='black',
-        linewidth=0.4,
-        alpha=0.9
+        edgecolor='white',
+        linewidth=0.6,
+        alpha=0.5
     )
 
 # ================== Timeout line =====================

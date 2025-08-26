@@ -1,0 +1,4 @@
+ABC command line: "&r /data/ziyi/SMT-Sweep/design/mul/mul_fix_5_one_output.aig; &cec -m".
+
+Assuming the current network is a single-output miter.
+Networks are equivalent.  Time =     0.11 sec
