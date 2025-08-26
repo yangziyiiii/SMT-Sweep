@@ -24,4 +24,4 @@ sudo apt install build-essential cmake default-jre libgmp-dev libboost-all-dev l
 
 ## Usage
 
-For a quick example of how to use the simulator, you may look at **`apps/test.cpp`**
+For a quick example of how to use the simulator, you may look at **`apps/main_cec.cpp`**
