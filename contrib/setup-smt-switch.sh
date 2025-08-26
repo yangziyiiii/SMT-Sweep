@@ -27,12 +27,12 @@ die () {
     exit 1
 }
 
-WITH_BOOLECOR=default
+WITH_BOOLECTOR=default
 WITH_MSAT=default
 WITH_YICES2=default
 CONF_OPTS=""
 WITH_PYTHON=default
-cvc5_home=defaultt
+cvc5_home=default
 
 while [ $# -gt 0 ]
 do
